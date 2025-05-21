@@ -1,55 +1,63 @@
-# 2025-01-12 Data Processing and Metagear Setup
-# Alex Dhond
+# ============================================
+# Script:     20250112_OffsetPermRev_DataProcessMetagearSetup.r
+# Date:       2025-01-12
+# Author:     Alex Dhond
+# Purpose:    Process Scopus & Web of Science exports for screening
+#             Set up screening effort using metagear
+# ============================================
 
-# This script is used to process data from Scopus and Web of Science exports.
-# It sets up the data for screening using the Metagear package.
-# The data is filtered and duplicates are removed
-# Metagear package is loaded and distributes screening effort to reviewer
+# ---------------------------
+# 1. Load packages
+# ---------------------------
+library(tidyverse)   # Data manipulation
+library(metagear)    # Screening tool for systematic reviews
+library(readxl)      # Read Excel files
+library(here)        # project-based file paths
 
-# Load necessary libraries
-library(tidyverse) # data manipulation
-library(metagear) # for meta analysis/literature review
-library(readxl) # for reading excel files
+# ---------------------------
+# 2. Read input files
+# ---------------------------
+scopus_raw <- read_csv(here("data", "20250112_Scopus_export.csv"))
+wos_raw <- read_excel(here("data", "20250112_WOS_export.xlsx"))
 
-# Load data
-scopus_raw <- read_csv("12-01-2025 scopus export.csv")
-wos_raw <- read_excel("WOS 12-01-2025.xlsx")
+# ---------------------------
+# 3. Filter and harmonize columns
+# ---------------------------
 
-# Inspect data
-glimpse(scopus_raw)
+# Filter Scopus
+scopus_filtered <- scopus_raw %>%
+  select(Title, Year, Abstract, DOI) %>%
+  rename(TITLE = Title, YEAR = Year, ABSTRACT = Abstract)
 
-# Check for duplicates and remove as necessary
-# Filter data - select title, abstract, year, DOI.
-scopus_filter <- scopus_raw %>%
-  select(Title, Year, Abstract, DOI)
-wos_filter <- wos_raw %>%
-  select(`Article Title`, `Publication Year`, Abstract, DOI)
+# Filter Web of Science
+wos_filtered <- wos_raw %>%
+  select(`Article Title`, `Publication Year`, Abstract, DOI) %>%
+  rename(TITLE = `Article Title`, YEAR = `Publication Year`, ABSTRACT = Abstract)
 
-# change column names
-colnames(scopus_filter) <- c("TITLE", "YEAR", "ABSTRACT", "DOI")
-colnames(wos_filter) <- c("TITLE", "YEAR", "ABSTRACT", "DOI")
+# ---------------------------
+# 4. Combine and deduplicate
+# ---------------------------
 
-# Bind the data together
-filtered_data <- rbind(scopus_filter, wos_filter)
+combined_refs <- bind_rows(scopus_filtered, wos_filtered) %>%
+  distinct(DOI, .keep_all = TRUE)  # Remove duplicate DOIs
 
-# Remove duplicates using the distinct function
-distinct_filtered_data <- distinct(filtered_data, .keep_all = TRUE)
+# ---------------------------
+# 5. Initialize metagear screening
+# ---------------------------
+refs_for_screening <- effort_initialize(combined_refs)
 
-# Remove duplicates using manual method based on DOI
-distinct_filtered_data <- distinct_filtered_data[!duplicated(distinct_filtered_data[, c("DOI")]), ]
+# Assign screening effort to reviewer, but don't write file yet
+reviewer_names <- c("AKD")
+refs_distributed <- effort_distribute(refs_for_screening, reviewers = reviewer_names, save_split = FALSE)
 
-# Manually view and check for duplicates (filter by alphabetical order)
-View(distinct_filtered_data)
+# ---------------------------
+# 6. Export
+# ---------------------------
 
-# Set up metagear package
+# Save to output folder manually
+write_csv(refs_distributed, here("output", "effort_AKD.csv"))
 
-# Metagear loading
-the_refs <- effort_initialize(distinct_filtered_data)
-names(the_refs)
-
-# Distribute screening effort to myself
-the_team <- c("AKD")
-the_refs_unscreened <- effort_distribute(the_refs, reviewers = the_team, save_split = TRUE)
-
-# Take a look
-glimpse(the_refs_unscreened)
+# ---------------------------
+# 7. Inspect result
+# ---------------------------
+glimpse(refs_distributed)
