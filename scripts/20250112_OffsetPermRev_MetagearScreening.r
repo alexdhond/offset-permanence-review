@@ -1,11 +1,33 @@
-# 2025-01-12 Metagear Screening Initialization
-# Alex Dhond
+# ===============================================
+# Script:     20250112_OffsetPermRev_MetagearScreening.r
+# Date:       2025-01-12
+# Author:     Alex Dhond
+# Purpose:    Launch metagear abstract screening GUI for AKD
+# ===============================================
 
-# This script is used to initialize Metagear
-# screening GUI for the reviewer (Alex) to begin the screening process.
+# ---------------------------
+# 1. Load packages
+# ---------------------------
+library(metagear) # Screening tool for systematic reviews
+library(here)  # for consistent project-based paths
 
-# Load necessary libraries
-library(metagear)
+# ---------------------------
+# 2. Define input file path
+# ---------------------------
 
-# Initialize Metagear screening GUI
-abstract_screener("effort_AKD.csv", aReviewer = "AKD", highlightColor = "powderblue", highlightKeywords = c("biodiversity", "carbon", "biodiversity offset", "wetland mitigation", "wetland", "carbon offset", "habitat", "offset"))
+# take input from the previous output folder
+input_file <- here("output", "effort_AKD.csv")
+
+# ---------------------------
+# 3. Launch metagear GUI
+# ---------------------------
+abstract_screener(
+  file        = input_file,
+  aReviewer   = "AKD",
+  highlightColor = "powderblue",
+  highlightKeywords = c(
+    "biodiversity", "carbon", "biodiversity offset",
+    "wetland mitigation", "wetland", "carbon offset",
+    "habitat", "offset"
+  )
+)
