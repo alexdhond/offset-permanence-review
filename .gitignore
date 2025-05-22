@@ -1,6 +1,6 @@
 # Gitignore File
 
-# R and RStudio temp files
+# R and RStudio files
 .Rproj.user/
 .Rhistory
 .RData
@@ -17,3 +17,9 @@ figures/
 
 # Raw data
 data/
+
+# Writing files
+writing/
+
+# Presentation (powerpoint) files
+presentations/
