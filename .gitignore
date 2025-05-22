@@ -6,3 +6,4 @@ renv/
 renv/library/
 output/
 data/
+.RDataTmp
