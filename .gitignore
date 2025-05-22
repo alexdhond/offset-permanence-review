@@ -1,9 +1,19 @@
+# Gitignore File
+
+# R and RStudio temp files
 .Rproj.user/
 .Rhistory
 .RData
 .Ruserdata
+.RDataTmp
+
+# renv internal library
 renv/
 renv/library/
+
+# Outputs and figures
 output/
+figures/
+
+# Raw data
 data/
-.RDataTmp
