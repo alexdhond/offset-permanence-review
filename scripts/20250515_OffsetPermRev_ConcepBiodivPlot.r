@@ -36,34 +36,41 @@ generate_trajectory <- function(name, biodiversity_func) {
 # Define offset scenarios
 #-----------------------------
 
-#-----------------------------
-# Custom scenarios with multiple types
-#-----------------------------
+# create list of baseline
+baseline_scenarios <- c("Habitat Creation", "Habitat Restoration", "Avoided Loss")
 
-# Avoided Loss: actual vs. counterfactual
-avoided_loss_actual <- generate_trajectory("Avoided Loss", function(t) {
-  90 + (10 / max(t)) * t  # linear increase from 90 to 100 over 100 time units
-}) %>%
-  mutate(type = "Actual")
+# Avoided loss scenarios
 
+# 1. Flat actual line
+avoided_loss_flat <- generate_trajectory("Avoided Loss", function(t) {
+  rep(90, length(t))
+}) %>% mutate(type = "Actual", subtype = "Flat")
+
+# 2. Slightly rising actual line
+avoided_loss_rising <- generate_trajectory("Avoided Loss", function(t) {
+  90 + (10 / max(t)) * t
+}) %>% mutate(type = "Actual", subtype = "Rising")
+
+# 3. Counterfactual (decline)
 avoided_loss_counterfactual <- generate_trajectory("Avoided Loss", function(t) {
   pmax(0, 90 - 0.8 * t)
-}) %>%
-  mutate(type = "Counterfactual")
+}) %>% mutate(type = "Counterfactual", subtype = "Declining (No Protection)")
 
+# Create a list of scenarios
 scenario_list <- list(
   
   # Habitat creation: starts at 0, rises to a cap
   generate_trajectory("Habitat Creation", function(t) {
-    pmin(s_sigmoid(t, K = 100, r = 0.2, t0 = 20), 100)
-  }),
+    pmin(s_sigmoid(t, K = 100, r = 0.2, t0 = 30), 100)
+  }) %>% mutate(type = "Actual", subtype = "Baseline"),
   
-  # Habitat restoration: starts above 0 (e.g., 30), and rises toward a higher asymptote
+  # Habitat restoration: starts above 0 (e.g., 50), and rises toward a higher asymptote
   generate_trajectory("Habitat Restoration", function(t) {
-    base <- 30
-    increment <- s_sigmoid(t, K = 70, r = 0.2, t0 = 20)
-    pmin(base + increment, 100)
-  }),
+    lower <- 50
+    upper <- 100
+    increment <- s_sigmoid(t, K = upper - lower, r = 0.35, t0 = 25)
+    lower + increment
+  }) %>% mutate(type = "Actual", subtype = "Baseline"),
 
   generate_trajectory("Ideal Offset (max = 100)", function(t) pmin(s_sigmoid(t), 100)),
   generate_trajectory("Offset with Limited Gains (max = 70)", function(t) pmin(s_sigmoid(t, K = 70), 70)),
@@ -140,11 +147,17 @@ scenario_list <- list(
   })
 )
 
-# Tag all with type actual
-scenario_list <- map(scenario_list, ~ mutate(.x, type = "Actual"))
+# Tag all scenarios with default type/subtype if not already set
+scenario_list <- map(scenario_list, function(df) {
+  df %>%
+    mutate(
+      type = if (!"type" %in% names(.)) "Actual" else type,
+      subtype = if (!"subtype" %in% names(.)) "Baseline" else subtype
+    )
+})
 
 # Combine all scenarios into one dataframe
-df_all <- bind_rows(scenario_list, avoided_loss_actual, avoided_loss_counterfactual)
+df_all <- bind_rows(scenario_list, avoided_loss_flat, avoided_loss_rising, avoided_loss_counterfactual)
 
 #-----------------------------
 # Define Colors
@@ -174,19 +187,49 @@ if (length(missing_colors) > 0) {
 #-----------------------------
 plot_offset_trajectories <- function(df, log_scale = TRUE, facet = FALSE, focal = NULL, show_title = TRUE) {
   scenarios <- unique(df$scenario)
-  color_vals <- if (!is.null(focal)) setNames(ifelse(scenarios == focal, offset_colors[focal], "gray70"), scenarios) else offset_colors
-  alpha_vals <- if (!is.null(focal)) setNames(ifelse(scenarios == focal, 1, 0.3), scenarios) else setNames(rep(1, length(scenarios)), scenarios)
-  linewidth_vals <- if (!is.null(focal)) setNames(ifelse(scenarios == focal, 1.6, 0.5), scenarios) else setNames(rep(1.2, length(scenarios)), scenarios)
   
-  p <- ggplot(df, aes(x = time, y = biodiversity, color = scenario, alpha = scenario, linewidth = scenario, linetype = type)) +
+  # Get style identifiers
+  style_ids <- unique(with(df, interaction(scenario, type, subtype)))
+  
+  # Repeat scenario color for each style_id based on the scenario part
+  get_scenario_from_id <- function(id) strsplit(as.character(id), split = "\\.")[[1]][1]
+  color_vals <- setNames(
+    vapply(style_ids, function(id) offset_colors[get_scenario_from_id(id)], character(1)),
+    style_ids
+  )
+  
+  # Style settings
+  alpha_vals <- setNames(rep(1, length(style_ids)), style_ids)
+  linewidth_vals <- setNames(rep(1.2, length(style_ids)), style_ids)
+
+  p <- ggplot(df, aes(
+    x = time,
+    y = biodiversity,
+    group = interaction(scenario, type, subtype),
+    color = interaction(scenario, type, subtype),
+    alpha = interaction(scenario, type, subtype),
+    linewidth = interaction(scenario, type, subtype),
+    linetype = subtype
+  )) +
     geom_line(show.legend = FALSE) +
     scale_color_manual(values = color_vals) +
     scale_alpha_manual(values = alpha_vals) +
     scale_linewidth_manual(values = linewidth_vals) +
-    scale_linetype_manual(values = c("Actual" = "solid", "Counterfactual" = "dotted"), guide = "none") +
+    scale_linetype_manual(values = c(
+      "Flat" = "dashed",
+      "Rising" = "solid",
+      "Declining (No Protection)" = "dotted")) +
     labs(
       title = if (show_title) {
-        if (!is.null(focal)) focal else if (log_scale) "Offset Trajectories (Log Time)" else "Offset Trajectories"
+        if (!is.null(focal)) {
+          focal
+        } else if (length(unique(df$scenario)) == 1) {
+          unique(df$scenario)
+        } else if (log_scale) {
+          "Offset Trajectories (Log Time)"
+        } else {
+          "Offset Trajectories"
+        }
       } else NULL,
       x = if (log_scale) "Time (log scale)" else "Time",
       y = "Relative Biodiversity"
@@ -215,9 +258,85 @@ print(plot_offset_trajectories(df_all, log_scale = FALSE, show_title = TRUE))
 # Preview a single scenario highlight
 print(plot_offset_trajectories(df_all, log_scale = TRUE, focal = "Offset Failure: Catastrophic Collapse (Year 20)", show_title = TRUE))
 
+
+baseline_color <- "#1f78b4"  # Dark blue
+
+# creation 
+plot_hc <- plot_offset_trajectories(
+  df_all %>% filter(scenario == "Habitat Creation"),
+  log_scale = FALSE,
+  show_title = TRUE
+) +
+  scale_color_manual(values = c("Habitat Creation.Actual.Baseline" = baseline_color)) +
+  scale_linetype_manual(values = c("Baseline" = "solid"))
+
+# restoration
+plot_hr <- plot_offset_trajectories(
+  df_all %>% filter(scenario == "Habitat Restoration"),
+  log_scale = FALSE,
+  show_title = TRUE
+) +
+  scale_color_manual(values = c("Habitat Restoration.Actual.Baseline" = "#1f78b4")) +
+  scale_linetype_manual(values = c("Baseline" = "solid")) +
+  ylim(0, 100)
+
+# Get all subtype identifiers for avoided loss
+avoided_loss_ids <- df_all %>%
+  filter(scenario == "Avoided Loss") %>%
+  mutate(id = interaction(scenario, type, subtype)) %>%
+  distinct(id) %>%
+  pull(id)
+
+# Build color map (all dark blue)
+color_map_al <- setNames(rep(baseline_color, length(avoided_loss_ids)), avoided_loss_ids)
+
+# Linetype map
+linetype_map_al <- c(
+  "Flat" = "dashed",
+  "Rising" = "solid",
+  "Declining (No Protection)" = "dotted"
+)
+
+plot_al <- plot_offset_trajectories(
+  df_all %>% filter(scenario == "Avoided Loss"),
+  log_scale = FALSE,
+  show_title = TRUE
+) +
+  scale_color_manual(values = color_map_al) +
+  scale_linetype_manual(values = linetype_map_al)
+
+print(plot_hc)
+print(plot_hr)
+print(plot_al)
+
+
+
 #-----------------------------
 # Export plots
 #-----------------------------
+
+# save the test habitat creation/restoration/averted loss plots
+# Save Habitat Creation plot
+ggsave(
+  filename = here("output", "figures", "habitat_creation.png"),
+  plot = plot_hc,
+  width = 8, height = 5, dpi = 300
+)
+
+# Save Habitat Restoration plot
+ggsave(
+  filename = here("output", "figures", "habitat_restoration.png"),
+  plot = plot_hr,
+  width = 8, height = 5, dpi = 300
+)
+
+# Save Avoided Loss plot
+ggsave(
+  filename = here("output", "figures", "avoided_loss.png"),
+  plot = plot_al,
+  width = 8, height = 5, dpi = 300
+)
+
 
 # # Export individual scenario plots (highlighted)
 # walk(unique(df_all$scenario), function(s) {
