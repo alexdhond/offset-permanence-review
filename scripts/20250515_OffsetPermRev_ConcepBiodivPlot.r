@@ -1,19 +1,25 @@
-# =============================
-# Biodiversity Offset Trajectory Plot Script
-# =============================
-
-# Load packages
-library(ggplot2)   # plotting
-library(dplyr)     # data manipulation
-library(scales)    # scaling axes
-library(purrr)     # iteration over scenarios
-library(here)      # relative file paths
+# ===============================================
+# Script:     20250515_OffsetPermRev_ConcepBiodivPlot.r
+# Date:       2025-05-23
+# Author:     Alex Dhond
+# Purpose:    Plot conceptual biodiversity offset trajectories
+# ===============================================
 
 #-----------------------------
-# Global settings
+# Load Required Packages
 #-----------------------------
 
-# Time vector
+library(ggplot2)   # Plotting
+library(dplyr)     # Data manipulation
+library(scales)    # Scale transformations
+library(purrr)     # Functional iteration
+library(here)      # Relative paths
+
+#-----------------------------
+# Global settings and functions
+#-----------------------------
+
+# Define time vector
 time <- seq(0, 100, by = 0.1)
 
 # Logistic growth function
@@ -21,9 +27,7 @@ s_sigmoid <- function(t, K = 100, r = 0.3, t0 = 15) {
   K / (1 + exp(-r * (t - t0)))
 }
 
-#-----------------------------
-# Generate scenario trajectories
-#-----------------------------
+# Generate a trajectory dataframe from a named biodiversity function
 generate_trajectory <- function(name, biodiversity_func) {
   data.frame(
     time = time,
@@ -36,35 +40,29 @@ generate_trajectory <- function(name, biodiversity_func) {
 # Define offset scenarios
 #-----------------------------
 
-# create list of baseline
+# Baseline scenario names for later reference
 baseline_scenarios <- c("Habitat Creation", "Habitat Restoration", "Avoided Loss")
 
-# Avoided loss scenarios
+# Avoided loss trajectories: flat, rising, and counter factual decline
+avoided_loss_flat <- generate_trajectory("Avoided Loss", function(t) rep(90, length(t))) %>%
+  mutate(type = "Actual", subtype = "Flat")
 
-# 1. Flat actual line
-avoided_loss_flat <- generate_trajectory("Avoided Loss", function(t) {
-  rep(90, length(t))
-}) %>% mutate(type = "Actual", subtype = "Flat")
+avoided_loss_rising <- generate_trajectory("Avoided Loss", function(t) 90 + (10 / max(t)) * t) %>%
+  mutate(type = "Actual", subtype = "Rising")
 
-# 2. Slightly rising actual line
-avoided_loss_rising <- generate_trajectory("Avoided Loss", function(t) {
-  90 + (10 / max(t)) * t
-}) %>% mutate(type = "Actual", subtype = "Rising")
+avoided_loss_counterfactual <- generate_trajectory("Avoided Loss", function(t) pmax(0, 90 - 0.8 * t)) %>%
+  mutate(type = "Counterfactual", subtype = "Declining (No Protection)")
 
-# 3. Counterfactual (decline)
-avoided_loss_counterfactual <- generate_trajectory("Avoided Loss", function(t) {
-  pmax(0, 90 - 0.8 * t)
-}) %>% mutate(type = "Counterfactual", subtype = "Declining (No Protection)")
 
-# Create a list of scenarios
+# All offset and restoration scenarios
 scenario_list <- list(
   
-  # Habitat creation: starts at 0, rises to a cap
+  # Habitat Creation
   generate_trajectory("Habitat Creation", function(t) {
     pmin(s_sigmoid(t, K = 100, r = 0.2, t0 = 30), 100)
   }) %>% mutate(type = "Actual", subtype = "Baseline"),
   
-  # Habitat restoration: starts above 0 (e.g., 50), and rises toward a higher asymptote
+  # Habitat Restoration
   generate_trajectory("Habitat Restoration", function(t) {
     lower <- 50
     upper <- 100
