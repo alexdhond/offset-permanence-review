@@ -41,7 +41,9 @@ generate_trajectory <- function(name, biodiversity_func) {
 #-----------------------------
 
 # Avoided Loss: actual vs. counterfactual
-avoided_loss_actual <- generate_trajectory("Avoided Loss", function(t) rep(90, length(t))) %>%
+avoided_loss_actual <- generate_trajectory("Avoided Loss", function(t) {
+  90 + (10 / max(t)) * t  # linear increase from 90 to 100 over 100 time units
+}) %>%
   mutate(type = "Actual")
 
 avoided_loss_counterfactual <- generate_trajectory("Avoided Loss", function(t) {
@@ -205,7 +207,7 @@ plot_offset_trajectories <- function(df, log_scale = TRUE, facet = FALSE, focal 
 # Preview plots
 #-----------------------------
 # View a combined plot (log scale)
-print(plot_offset_trajectories(df_all, log_scale = TRUE, show_title = TRUE, facet = TRUE))
+print(plot_offset_trajectories(df_all, log_scale = TRUE, show_title = TRUE))
 
 # View a combined plot (linear scale)
 print(plot_offset_trajectories(df_all, log_scale = FALSE, show_title = TRUE))
@@ -217,18 +219,18 @@ print(plot_offset_trajectories(df_all, log_scale = TRUE, focal = "Offset Failure
 # Export plots
 #-----------------------------
 
-# Export individual scenario plots (highlighted)
-walk(unique(df_all$scenario), function(s) {
-  plot <- plot_offset_trajectories(df_all, log_scale = TRUE, focal = s, show_title = FALSE)
-  file_name <- paste0("highlight_", gsub("[^a-zA-Z0-9]", "_", s), ".png")
-  ggsave(here("output", "figures", file_name), plot, width = 8, height = 5, dpi = 300)
-})
-
-# Export combined plots
-ggsave(here("output", "figures", "all_scenarios_log.png"),
-       plot_offset_trajectories(df_all, log_scale = TRUE, show_title = FALSE),
-       width = 8, height = 5, dpi = 300)
-
-ggsave(here("output", "figures", "all_scenarios_linear.png"),
-       plot_offset_trajectories(df_all, log_scale = FALSE, show_title = FALSE),
-       width = 8, height = 5, dpi = 300)
+# # Export individual scenario plots (highlighted)
+# walk(unique(df_all$scenario), function(s) {
+#   plot <- plot_offset_trajectories(df_all, log_scale = TRUE, focal = s, show_title = FALSE)
+#   file_name <- paste0("highlight_", gsub("[^a-zA-Z0-9]", "_", s), ".png")
+#   ggsave(here("output", "figures", file_name), plot, width = 8, height = 5, dpi = 300)
+# })
+# 
+# # Export combined plots
+# ggsave(here("output", "figures", "all_scenarios_log.png"),
+#        plot_offset_trajectories(df_all, log_scale = TRUE, show_title = FALSE),
+#        width = 8, height = 5, dpi = 300)
+# 
+# ggsave(here("output", "figures", "all_scenarios_linear.png"),
+#        plot_offset_trajectories(df_all, log_scale = FALSE, show_title = FALSE),
+#        width = 8, height = 5, dpi = 300)
