@@ -35,7 +35,34 @@ generate_trajectory <- function(name, biodiversity_func) {
 #-----------------------------
 # Define offset scenarios
 #-----------------------------
+
+#-----------------------------
+# Custom scenarios with multiple types
+#-----------------------------
+
+# Avoided Loss: actual vs. counterfactual
+avoided_loss_actual <- generate_trajectory("Avoided Loss", function(t) rep(90, length(t))) %>%
+  mutate(type = "Actual")
+
+avoided_loss_counterfactual <- generate_trajectory("Avoided Loss", function(t) {
+  pmax(0, 90 - 0.8 * t)
+}) %>%
+  mutate(type = "Counterfactual")
+
 scenario_list <- list(
+  
+  # Habitat creation: starts at 0, rises to a cap
+  generate_trajectory("Habitat Creation", function(t) {
+    pmin(s_sigmoid(t, K = 100, r = 0.2, t0 = 20), 100)
+  }),
+  
+  # Habitat restoration: starts above 0 (e.g., 30), and rises toward a higher asymptote
+  generate_trajectory("Habitat Restoration", function(t) {
+    base <- 30
+    increment <- s_sigmoid(t, K = 70, r = 0.2, t0 = 20)
+    pmin(base + increment, 100)
+  }),
+
   generate_trajectory("Ideal Offset (max = 100)", function(t) pmin(s_sigmoid(t), 100)),
   generate_trajectory("Offset with Limited Gains (max = 70)", function(t) pmin(s_sigmoid(t, K = 70), 70)),
   generate_trajectory("Offset Failure: Catastrophic Collapse (Year 20)", function(t) {
@@ -111,8 +138,11 @@ scenario_list <- list(
   })
 )
 
+# Tag all with type actual
+scenario_list <- map(scenario_list, ~ mutate(.x, type = "Actual"))
+
 # Combine all scenarios into one dataframe
-df_all <- bind_rows(scenario_list)
+df_all <- bind_rows(scenario_list, avoided_loss_actual, avoided_loss_counterfactual)
 
 #-----------------------------
 # Define Colors
@@ -146,11 +176,12 @@ plot_offset_trajectories <- function(df, log_scale = TRUE, facet = FALSE, focal 
   alpha_vals <- if (!is.null(focal)) setNames(ifelse(scenarios == focal, 1, 0.3), scenarios) else setNames(rep(1, length(scenarios)), scenarios)
   linewidth_vals <- if (!is.null(focal)) setNames(ifelse(scenarios == focal, 1.6, 0.5), scenarios) else setNames(rep(1.2, length(scenarios)), scenarios)
   
-  p <- ggplot(df, aes(x = time, y = biodiversity, color = scenario, alpha = scenario, linewidth = scenario)) +
+  p <- ggplot(df, aes(x = time, y = biodiversity, color = scenario, alpha = scenario, linewidth = scenario, linetype = type)) +
     geom_line(show.legend = FALSE) +
     scale_color_manual(values = color_vals) +
     scale_alpha_manual(values = alpha_vals) +
     scale_linewidth_manual(values = linewidth_vals) +
+    scale_linetype_manual(values = c("Actual" = "solid", "Counterfactual" = "dotted"), guide = "none") +
     labs(
       title = if (show_title) {
         if (!is.null(focal)) focal else if (log_scale) "Offset Trajectories (Log Time)" else "Offset Trajectories"
@@ -169,6 +200,18 @@ plot_offset_trajectories <- function(df, log_scale = TRUE, facet = FALSE, focal 
   
   p
 }
+
+#-----------------------------
+# Preview plots
+#-----------------------------
+# View a combined plot (log scale)
+print(plot_offset_trajectories(df_all, log_scale = TRUE, show_title = TRUE, facet = TRUE))
+
+# View a combined plot (linear scale)
+print(plot_offset_trajectories(df_all, log_scale = FALSE, show_title = TRUE))
+
+# Preview a single scenario highlight
+print(plot_offset_trajectories(df_all, log_scale = TRUE, focal = "Offset Failure: Catastrophic Collapse (Year 20)", show_title = TRUE))
 
 #-----------------------------
 # Export plots
