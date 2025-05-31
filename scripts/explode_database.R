@@ -67,3 +67,14 @@ unmapped_ecosystems <- data_raw %>%
   distinct(ecosystem_type_specific) %>%
   filter(!ecosystem_type_specific %in% lookup_eco$ecosystem_type_specific)
 
+# ---------------------------
+# 5. COUNTRY/SUBNATIONAL REGION: Clean, explode, and delete old column
+# ---------------------------
+
+unique(data_exploded$country)
+
+unique(lookup_country$country)
+
+data_cleaned1 <- data_raw %>%
+  separate_rows(subnational_region, sep = ";\\s*") %>%
+  select(-)
