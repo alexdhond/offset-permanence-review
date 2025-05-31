@@ -1,5 +1,5 @@
 # ===============================================
-# Script:     ref_country_region_global.R
+# Script:     ref_country_subregion_lookup.R
 # Date:       2025-05-30
 # Author:     Alex Dhond
 # Purpose:    Load and save a global lookup table for countries and subnational regions
@@ -34,6 +34,33 @@ lookup_global <- admin1 %>%
   ) %>%
   distinct() %>%                  # Remove duplicate rows if any
   arrange(country, subnational_region)  # Sort for readability
+
+# ---------------------------
+# 4 Standardize Country Names (Alias Mapping)
+# ---------------------------
+
+# Create lookup table for common aliases
+country_aliases <- tribble(
+  ~raw_country,       ~standard_country,
+  "UK",               "United Kingdom",
+  "U.K.",             "United Kingdom",
+  "USA",              "United States of America",
+  "US",               "United States of America",
+  "Russia",           "Russian Federation",
+  "Viet Nam",         "Vietnam",
+  "Iran",             "Iran, Islamic Republic of",
+  "South Korea",      "Korea, Republic of"
+  # Add more aliases as needed
+)
+
+unique(data_exploded$country)
+
+
+# Apply to lookup table
+lookup_global <- lookup_global %>%
+  left_join(country_aliases, by = c("country" = "raw_country")) %>%
+  mutate(country = coalesce(standard_country, country)) %>%
+  select(-standard_country)
 
 # ---------------------------
 # 4. Save Lookup Table
