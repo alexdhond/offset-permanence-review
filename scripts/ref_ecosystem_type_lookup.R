@@ -19,9 +19,24 @@ library(janitor)   # clean column names
 # 2. Load and preprocess data
 # ---------------------------
 
-# Load data data in and clean columns
+# Load data data in and clean column names
 data <- read_excel(here("data", "offset_perm_rev_database.xlsx")) %>%
   clean_names() # Clean column names 
+
+# Check for missing or incomplete ecosystem specific and broad pairings
+incomplete_ecosystem_rows <- data %>%
+  filter(
+    (is.na(ecosystem_type_specific) & !is.na(ecosystem_type_broad)) |
+      (!is.na(ecosystem_type_specific) & is.na(ecosystem_type_broad))
+  )
+
+# View if any problematic rows exist
+if (nrow(incomplete_ecosystem_rows) > 0) {
+  warning("Some rows have inconsistent ecosystem information (specific or broad is missing).")
+  print(incomplete_ecosystem_rows)
+} else {
+  message("✅ All ecosystem_type_specific entries have corresponding ecosystem_type_broad values (and vice versa).")
+}
 
 # Select only ecosystem columns
 ecosystem <- data %>%
@@ -346,6 +361,9 @@ observed_specific_terms <- df_ecosystem %>%
 unmapped_terms <- observed_specific_terms %>%
   anti_join(lookup_specific_to_broad, by = "ecosystem_type_specific")
 
+unmapped_terms <- observed_specific_terms %>%
+  anti_join(lookup_specific_to_broad, by = "ecosystem_type_specific")
+
 # View duplicates in lookup
 lookup_specific_to_broad %>%
   count(ecosystem_type_specific, sort = TRUE) %>%
@@ -355,211 +373,219 @@ lookup_specific_to_broad %>%
 # 8. Apply lookup to dataset
 # ---------------------------
 
-data_ecosystem_mapped <- data %>%
-  select(study_title, ecosystem_type_specific) %>%
-  separate_rows(ecosystem_type_specific, sep = ";\\s*") %>%
-  left_join(lookup_specific_to_broad, by = "ecosystem_type_specific")
-
-
-#####
-
-
-
+# data_ecosystem_mapped <- data %>%
+#   select(study_title, ecosystem_type_specific) %>%
+#   separate_rows(ecosystem_type_specific, sep = ";\\s*") %>%
+#   left_join(lookup_specific_to_broad, by = "ecosystem_type_specific")
 
 # ---------------------------
-# 9. OPTIONAL: Create IUCN typology to match ecosystems
+# 9. Save ecosystem lookup table
 # ---------------------------
 
-# Using the IUCN Global Ecosystem Typology 2.0 to try and classify the biomes, to provide more resolution on what offsets exist
+# Save to directory, make one if does not exist
+output_dir <- here("data", "reference")
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
 
-# Create the typology from https://portals.iucn.org/library/sites/library/files/documents/2020-037-En.pdf
-iucn_typology <- tribble(
-  ~Realm, ~Biome_Code, ~Biome, ~EFG_Code, ~EFG_Name,
-  "TERRESTRIAL", "T1", "Tropical-subtropical forests", "T1.1", "Tropical-subtropical lowland rainforests",
-  "TERRESTRIAL", "T1", "Tropical-subtropical forests", "T1.2", "Tropical-subtropical dry forests and thickets",
-  "TERRESTRIAL", "T1", "Tropical-subtropical forests", "T1.3", "Tropical-subtropical montane rainforests",
-  "TERRESTRIAL", "T1", "Tropical-subtropical forests", "T1.4", "Tropical heath forests",
-  "TERRESTRIAL", "T2", "Temperate-boreal forests & woodlands", "T2.1", "Boreal and temperate high montane forests and woodlands",
-  "TERRESTRIAL", "T2", "Temperate-boreal forests & woodlands", "T2.2", "Deciduous temperate forests",
-  "TERRESTRIAL", "T2", "Temperate-boreal forests & woodlands", "T2.3", "Oceanic cool temperate rainforests",
-  "TERRESTRIAL", "T2", "Temperate-boreal forests & woodlands", "T2.4", "Warm temperate laurophyll forests",
-  "TERRESTRIAL", "T2", "Temperate-boreal forests & woodlands", "T2.5", "Temperate pyric humid forests",
-  "TERRESTRIAL", "T2", "Temperate-boreal forests & woodlands", "T2.6", "Temperate pyric sclerophyll forests and woodlands",
-  "TERRESTRIAL", "T3", "Shrublands & shrubby woodlands", "T3.1", "Seasonally dry tropical shrublands",
-  "TERRESTRIAL", "T3", "Shrublands & shrubby woodlands", "T3.2", "Seasonally dry temperate heaths and shrublands",
-  "TERRESTRIAL", "T3", "Shrublands & shrubby woodlands", "T3.3", "Cool temperate heathlands",
-  "TERRESTRIAL", "T3", "Shrublands & shrubby woodlands", "T3.4", "Rocky pavements, screes and lava flows",
-  "TERRESTRIAL", "T4", "Savannas and grasslands", "T4.1", "Trophic savannas",
-  "TERRESTRIAL", "T4", "Savannas and grasslands", "T4.2", "Pyric tussock savannas",
-  "TERRESTRIAL", "T4", "Savannas and grasslands", "T4.3", "Hummock savannas",
-  "TERRESTRIAL", "T4", "Savannas and grasslands", "T4.4", "Temperate woodlands",
-  "TERRESTRIAL", "T4", "Savannas and grasslands", "T4.5", "Temperate subhumid grasslands",
-  "TERRESTRIAL", "T5", "Deserts and semi-deserts", "T5.1", "Semi-desert steppes",
-  "TERRESTRIAL", "T5", "Deserts and semi-deserts", "T5.2", "Thorny deserts and semi-deserts",
-  "TERRESTRIAL", "T5", "Deserts and semi-deserts", "T5.3", "Sclerophyll hot deserts and semi-deserts",
-  "TERRESTRIAL", "T5", "Deserts and semi-deserts", "T5.4", "Cool deserts and semi-deserts",
-  "TERRESTRIAL", "T5", "Deserts and semi-deserts", "T5.5", "Hyper-arid deserts",
-  "TERRESTRIAL", "T6", "Polar-alpine", "T6.1", "Ice sheets, glaciers and perennial snowfields",
-  "TERRESTRIAL", "T6", "Polar-alpine", "T6.2", "Polar-alpine rocky outcrops",
-  "TERRESTRIAL", "T6", "Polar-alpine", "T6.3", "Polar tundra and deserts",
-  "TERRESTRIAL", "T6", "Polar-alpine", "T6.4", "Temperate alpine grasslands and shrublands",
-  "TERRESTRIAL", "T6", "Polar-alpine", "T6.5", "Tropical alpine grasslands and shrublands",
-  "TERRESTRIAL", "T7", "Intensive land-use systems", "T7.1", "Annual croplands",
-  "TERRESTRIAL", "T7", "Intensive land-use systems", "T7.2", "Sown pastures and fields",
-  "TERRESTRIAL", "T7", "Intensive land-use systems", "T7.3", "Plantations",
-  "TERRESTRIAL", "T7", "Intensive land-use systems", "T7.4", "Urban and industrial ecosystems",
-  "TERRESTRIAL", "T7", "Intensive land-use systems", "T7.5", "Derived semi-natural pastures and oldfields",
-  "SUBTERRANEAN", "S1", "Subterranean lithic systems", "S1.1", "Aerobic caves",
-  "SUBTERRANEAN", "S1", "Subterranean lithic systems", "S1.2", "Endolithic systems",
-  "SUBTERRANEAN", "S1", "Subterranean lithic systems", "S2.1", "Anthropogenic subterranean voids",
-  "SUBTERRANEAN-FRESHWATER", "SF1", "Subterranean freshwaters", "SF1.1", "Underground streams and pools",
-  "SUBTERRANEAN-FRESHWATER", "SF1", "Subterranean freshwaters", "SF1.2", "Groundwater ecosystems",
-  "SUBTERRANEAN-FRESHWATER", "SF1", "Subterranean freshwaters", "SF2.1", "Water pipes and subterranean canals",
-  "SUBTERRANEAN-FRESHWATER", "SF1", "Subterranean freshwaters", "SF2.2", "Flooded mines and other voids",
-  "SUBTERRANEAN-MARINE", "SM1", "Subterranean tidal systems", "SM3.1", "Anchialine caves",
-  "SUBTERRANEAN-MARINE", "SM1", "Subterranean tidal systems", "SM3.2", "Anchialine pools",
-  "SUBTERRANEAN-MARINE", "SM1", "Subterranean tidal systems", "SM3.1", "Sea caves",
-  "FRESHWATER-TERRESTRIAL", "TF1", "Palustrine wetlands", "TF1.1", "Tropical flooded forests and peat forests",
-  "FRESHWATER-TERRESTRIAL", "TF1", "Palustrine wetlands", "TF1.2", "Subtropical/temperate forested wetlands",
-  "FRESHWATER-TERRESTRIAL", "TF1", "Palustrine wetlands", "TF1.3", "Permanent marshes",
-  "FRESHWATER-TERRESTRIAL", "TF1", "Palustrine wetlands", "TF1.4", "Seasonal floodplain marshes",
-  "FRESHWATER-TERRESTRIAL", "TF1", "Palustrine wetlands", "TF1.5", "Episodic arid floodplains",
-  "FRESHWATER-TERRESTRIAL", "TF1", "Palustrine wetlands", "TF1.6", "Boreal, temperate and montane peat bogs",
-  "FRESHWATER-TERRESTRIAL", "TF1", "Palustrine wetlands", "TF1.7", "Boreal and temperate fens",
-  "FRESHWATER", "F1", "Rivers and streams", "F1.1", "Permanent upland streams",
-  "FRESHWATER", "F1", "Rivers and streams", "F1.2", "Permanent lowland rivers",
-  "FRESHWATER", "F1", "Rivers and streams", "F1.3", "Freeze-thaw rivers and streams",
-  "FRESHWATER", "F1", "Rivers and streams", "F1.4", "Seasonal upland streams",
-  "FRESHWATER", "F1", "Rivers and streams", "F1.5", "Seasonal lowland rivers",
-  "FRESHWATER", "F1", "Rivers and streams", "F1.6", "Episodic arid rivers",
-  "FRESHWATER", "F1", "Rivers and streams", "F1.7", "Large lowland rivers",
-  "FRESHWATER", "F2", "Lakes", "F2.1", "Large permanent freshwater lakes",
-  "FRESHWATER", "F2", "Lakes", "F2.2", "Small permanent freshwater lakes",
-  "FRESHWATER", "F2", "Lakes", "F2.3", "Seasonal freshwater lakes",
-  "FRESHWATER", "F2", "Lakes", "F2.4", "Freeze-thaw freshwater lakes",
-  "FRESHWATER", "F2", "Lakes", "F2.5", "Ephemeral freshwater lakes",
-  "FRESHWATER", "F2", "Lakes", "F2.6", "Permanent salt and soda lakes",
-  "FRESHWATER", "F2", "Lakes", "F2.7", "Ephemeral salt lakes",
-  "FRESHWATER", "F2", "Lakes", "F2.8", "Artesian springs and oases",
-  "FRESHWATER", "F2", "Lakes", "F2.9", "Geothermal pools and wetlands",
-  "FRESHWATER", "F2", "Lakes", "F2.10", "Subglacial lakes",
-  "FRESHWATER", "F3", "Artificial fresh waters", "F3.1", "Large reservoirs",
-  "FRESHWATER", "F3", "Artificial fresh waters", "F3.2", "Constructed lacustrine wetlands",
-  "FRESHWATER", "F3", "Artificial fresh waters", "F3.3", "Rice paddies",
-  "FRESHWATER", "F3", "Artificial fresh waters", "F3.4", "Freshwater aquafarms",
-  "FRESHWATER", "F3", "Artificial fresh waters", "F3.5", "Canals, ditches and drains",
-  "FRESHWATER-MARINE", "FM1", "Semi-confined transitional waters", "FM1.1", "Deepwater coastal inlets",
-  "FRESHWATER-MARINE", "FM1", "Semi-confined transitional waters", "FM1.2", "Permanently open riverine estuaries and bays",
-  "FRESHWATER-MARINE", "FM1", "Semi-confined transitional waters", "FM1.3", "Intermittently closed and open lakes and lagoons",
-  "MARINE", "M", "Marine shelfs", "M1.1", "Seagrass meadows",
-  "MARINE", "M", "Marine shelfs", "M1.2", "Kelp forests",
-  "MARINE", "M", "Marine shelfs", "M1.3", "Photic coral reefs",
-  "MARINE", "M", "Marine shelfs", "M1.4", "Shellfish beds and reefs",
-  "MARINE", "M", "Marine shelfs", "M1.5", "Photo-limited marine animal forests",
-  "MARINE", "M", "Marine shelfs", "M1.6", "Subtidal rocky reefs",
-  "MARINE", "M", "Marine shelfs", "M1.7", "Subtidal sand beds",
-  "MARINE", "M", "Marine shelfs", "M1.8", "Subtidal mud plains",
-  "MARINE", "M", "Marine shelfs", "M1.9", "Upwelling zones",
-  "MARINE", "M2", "Pelagic ocean waters", "M2.1", "Epipelagic ocean waters",
-  "MARINE", "M2", "Pelagic ocean waters", "M2.2", "Mesopelagic ocean waters",
-  "MARINE", "M2", "Pelagic ocean waters", "M2.3", "Bathypelagic ocean waters",
-  "MARINE", "M2", "Pelagic ocean waters", "M2.4", "Abyssopelagic ocean waters",
-  "MARINE", "M2", "Pelagic ocean waters", "M2.5", "Sea ice",
-  "MARINE", "M3", "Deep sea floors", "M3.1", "Continental and island slopes",
-  "MARINE", "M3", "Deep sea floors", "M3.2", "Marine canyons",
-  "MARINE", "M3", "Deep sea floors", "M3.3", "Abyssal plains",
-  "MARINE", "M3", "Deep sea floors", "M3.4", "Seamounts, ridges and plateaus",
-  "MARINE", "M3", "Deep sea floors", "M3.5", "Deepwater biogenic beds",
-  "MARINE", "M3", "Deep sea floors", "M3.6", "Hadal trenches and troughs",
-  "MARINE", "M3", "Deep sea floors", "M3.7", "Chemosynthetically-based ecosystems",
-  "MARINE", "M4", "Anthropogenic marine systems", "M4.1", "Submerged artificial structures",
-  "MARINE", "M4", "Anthropogenic marine systems", "M4.2", "Marine aquafarms",
-  "MARINE-TERRESTRIAL", "MT1", "Shoreline systems", "MT1.1", "Rocky shores",
-  "MARINE-TERRESTRIAL", "MT1", "Shoreline systems", "MT1.2", "Muddy shores",
-  "MARINE-TERRESTRIAL", "MT1", "Shoreline systems", "MT1.3", "Sandy shores",
-  "MARINE-TERRESTRIAL", "MT1", "Shoreline systems", "MT1.4", "Boulder and cobble shores",
-  "MARINE-TERRESTRIAL", "MT1", "Shoreline systems", "MT2.1", "Coastal shrublands and grasslands",
-  "MARINE-TERRESTRIAL", "MT1", "Shoreline systems", "MT3.1", "Artificial shores",
-  "MARINE-FRESHWATER-TERRESTRIAL", "MFT1", "Brackish tidal systems", "MFT1.1", "Coastal river deltas",
-  "MARINE-FRESHWATER-TERRESTRIAL", "MFT1", "Brackish tidal systems", "MFT1.2", "Intertidal forests and shrublands",
-  "MARINE-FRESHWATER-TERRESTRIAL", "MFT1", "Brackish tidal systems", "MFT1.3", "Coastal saltmarshes and reedbeds",
-)
+# save file to path and write to csv
+output_path <- file.path(output_dir, "ecosystem_specific_to_broad_lookup.csv")
+write_csv(lookup_specific_to_broad, output_path)
 
-# ---------------------------
-# 5. Manually match broad terms to IUCN list
-# ---------------------------
-
-# Create lookup table: specific ecosystem IUCN Biome
-
-lookup_specific_to_iucn_biome <- tibble(
-  ecosystem_type_specific = c(
-    
-    # tropical forest terms
-    
-    "lowland humid tropical forest",
-    "tall evergreen forest",
-    "upland forest",
-    "tropical rainforest",
-    "miombo woodland",
-    "pine forest",
-    "boreal forest",
-    
-    
-    
-    
-    # Wetland-related
-    "vernal pool",
-    "peatland",
-    "seasonal pond",
-    "forested wetland",
-    
-    # Coastal/marine
-    "salt marsh",
-    "mangrove forest",
-    "seagrass meadow",
-    "tidal marsh",
-    
-    # Grassland/Savanna
-    "prairie",
-    "tropical savanna",
-    "grassland",
-    
-    # Freshwater
-    "riverine",
-    "perennial stream",
-    "lacustrine shore"
-  ),
-  Biome = c(
-    # Forest
-    "Tropical-subtropical forests",
-    "Tropical-subtropical forests",
-    "Temperate-boreal forests & woodlands",
-    "Tropical-subtropical forests",
-    "Savannas and grasslands",
-    "Temperate-boreal forests & woodlands",
-    "Temperate-boreal forests & woodlands",
-    
-    # Wetland
-    "Palustrine wetlands",
-    "Palustrine wetlands",
-    "Palustrine wetlands",
-    "Palustrine wetlands",
-    
-    # Coastal/marine
-    "Marine shelfs",
-    "Brackish tidal systems",
-    "Marine shelfs",
-    "Brackish tidal systems",
-    
-    # Grassland/Savanna
-    "Savannas and grasslands",
-    "Savannas and grasslands",
-    "Savannas and grasslands",
-    
-    # Freshwater
-    "Rivers and streams",
-    "Rivers and streams",
-    "Lakes"
-  )
-)
+# # ---------------------------
+# # 10. OPTIONAL: Create IUCN intermediate typology to match ecosystems
+# # ---------------------------
+# 
+# # Using the IUCN Global Ecosystem Typology 2.0 to try and classify the biomes, to provide more resolution on what offsets exist
+# 
+# # Create the typology from https://portals.iucn.org/library/sites/library/files/documents/2020-037-En.pdf
+# iucn_typology <- tribble(
+#   ~Realm, ~Biome_Code, ~Biome, ~EFG_Code, ~EFG_Name,
+#   "TERRESTRIAL", "T1", "Tropical-subtropical forests", "T1.1", "Tropical-subtropical lowland rainforests",
+#   "TERRESTRIAL", "T1", "Tropical-subtropical forests", "T1.2", "Tropical-subtropical dry forests and thickets",
+#   "TERRESTRIAL", "T1", "Tropical-subtropical forests", "T1.3", "Tropical-subtropical montane rainforests",
+#   "TERRESTRIAL", "T1", "Tropical-subtropical forests", "T1.4", "Tropical heath forests",
+#   "TERRESTRIAL", "T2", "Temperate-boreal forests & woodlands", "T2.1", "Boreal and temperate high montane forests and woodlands",
+#   "TERRESTRIAL", "T2", "Temperate-boreal forests & woodlands", "T2.2", "Deciduous temperate forests",
+#   "TERRESTRIAL", "T2", "Temperate-boreal forests & woodlands", "T2.3", "Oceanic cool temperate rainforests",
+#   "TERRESTRIAL", "T2", "Temperate-boreal forests & woodlands", "T2.4", "Warm temperate laurophyll forests",
+#   "TERRESTRIAL", "T2", "Temperate-boreal forests & woodlands", "T2.5", "Temperate pyric humid forests",
+#   "TERRESTRIAL", "T2", "Temperate-boreal forests & woodlands", "T2.6", "Temperate pyric sclerophyll forests and woodlands",
+#   "TERRESTRIAL", "T3", "Shrublands & shrubby woodlands", "T3.1", "Seasonally dry tropical shrublands",
+#   "TERRESTRIAL", "T3", "Shrublands & shrubby woodlands", "T3.2", "Seasonally dry temperate heaths and shrublands",
+#   "TERRESTRIAL", "T3", "Shrublands & shrubby woodlands", "T3.3", "Cool temperate heathlands",
+#   "TERRESTRIAL", "T3", "Shrublands & shrubby woodlands", "T3.4", "Rocky pavements, screes and lava flows",
+#   "TERRESTRIAL", "T4", "Savannas and grasslands", "T4.1", "Trophic savannas",
+#   "TERRESTRIAL", "T4", "Savannas and grasslands", "T4.2", "Pyric tussock savannas",
+#   "TERRESTRIAL", "T4", "Savannas and grasslands", "T4.3", "Hummock savannas",
+#   "TERRESTRIAL", "T4", "Savannas and grasslands", "T4.4", "Temperate woodlands",
+#   "TERRESTRIAL", "T4", "Savannas and grasslands", "T4.5", "Temperate subhumid grasslands",
+#   "TERRESTRIAL", "T5", "Deserts and semi-deserts", "T5.1", "Semi-desert steppes",
+#   "TERRESTRIAL", "T5", "Deserts and semi-deserts", "T5.2", "Thorny deserts and semi-deserts",
+#   "TERRESTRIAL", "T5", "Deserts and semi-deserts", "T5.3", "Sclerophyll hot deserts and semi-deserts",
+#   "TERRESTRIAL", "T5", "Deserts and semi-deserts", "T5.4", "Cool deserts and semi-deserts",
+#   "TERRESTRIAL", "T5", "Deserts and semi-deserts", "T5.5", "Hyper-arid deserts",
+#   "TERRESTRIAL", "T6", "Polar-alpine", "T6.1", "Ice sheets, glaciers and perennial snowfields",
+#   "TERRESTRIAL", "T6", "Polar-alpine", "T6.2", "Polar-alpine rocky outcrops",
+#   "TERRESTRIAL", "T6", "Polar-alpine", "T6.3", "Polar tundra and deserts",
+#   "TERRESTRIAL", "T6", "Polar-alpine", "T6.4", "Temperate alpine grasslands and shrublands",
+#   "TERRESTRIAL", "T6", "Polar-alpine", "T6.5", "Tropical alpine grasslands and shrublands",
+#   "TERRESTRIAL", "T7", "Intensive land-use systems", "T7.1", "Annual croplands",
+#   "TERRESTRIAL", "T7", "Intensive land-use systems", "T7.2", "Sown pastures and fields",
+#   "TERRESTRIAL", "T7", "Intensive land-use systems", "T7.3", "Plantations",
+#   "TERRESTRIAL", "T7", "Intensive land-use systems", "T7.4", "Urban and industrial ecosystems",
+#   "TERRESTRIAL", "T7", "Intensive land-use systems", "T7.5", "Derived semi-natural pastures and oldfields",
+#   "SUBTERRANEAN", "S1", "Subterranean lithic systems", "S1.1", "Aerobic caves",
+#   "SUBTERRANEAN", "S1", "Subterranean lithic systems", "S1.2", "Endolithic systems",
+#   "SUBTERRANEAN", "S1", "Subterranean lithic systems", "S2.1", "Anthropogenic subterranean voids",
+#   "SUBTERRANEAN-FRESHWATER", "SF1", "Subterranean freshwaters", "SF1.1", "Underground streams and pools",
+#   "SUBTERRANEAN-FRESHWATER", "SF1", "Subterranean freshwaters", "SF1.2", "Groundwater ecosystems",
+#   "SUBTERRANEAN-FRESHWATER", "SF1", "Subterranean freshwaters", "SF2.1", "Water pipes and subterranean canals",
+#   "SUBTERRANEAN-FRESHWATER", "SF1", "Subterranean freshwaters", "SF2.2", "Flooded mines and other voids",
+#   "SUBTERRANEAN-MARINE", "SM1", "Subterranean tidal systems", "SM3.1", "Anchialine caves",
+#   "SUBTERRANEAN-MARINE", "SM1", "Subterranean tidal systems", "SM3.2", "Anchialine pools",
+#   "SUBTERRANEAN-MARINE", "SM1", "Subterranean tidal systems", "SM3.1", "Sea caves",
+#   "FRESHWATER-TERRESTRIAL", "TF1", "Palustrine wetlands", "TF1.1", "Tropical flooded forests and peat forests",
+#   "FRESHWATER-TERRESTRIAL", "TF1", "Palustrine wetlands", "TF1.2", "Subtropical/temperate forested wetlands",
+#   "FRESHWATER-TERRESTRIAL", "TF1", "Palustrine wetlands", "TF1.3", "Permanent marshes",
+#   "FRESHWATER-TERRESTRIAL", "TF1", "Palustrine wetlands", "TF1.4", "Seasonal floodplain marshes",
+#   "FRESHWATER-TERRESTRIAL", "TF1", "Palustrine wetlands", "TF1.5", "Episodic arid floodplains",
+#   "FRESHWATER-TERRESTRIAL", "TF1", "Palustrine wetlands", "TF1.6", "Boreal, temperate and montane peat bogs",
+#   "FRESHWATER-TERRESTRIAL", "TF1", "Palustrine wetlands", "TF1.7", "Boreal and temperate fens",
+#   "FRESHWATER", "F1", "Rivers and streams", "F1.1", "Permanent upland streams",
+#   "FRESHWATER", "F1", "Rivers and streams", "F1.2", "Permanent lowland rivers",
+#   "FRESHWATER", "F1", "Rivers and streams", "F1.3", "Freeze-thaw rivers and streams",
+#   "FRESHWATER", "F1", "Rivers and streams", "F1.4", "Seasonal upland streams",
+#   "FRESHWATER", "F1", "Rivers and streams", "F1.5", "Seasonal lowland rivers",
+#   "FRESHWATER", "F1", "Rivers and streams", "F1.6", "Episodic arid rivers",
+#   "FRESHWATER", "F1", "Rivers and streams", "F1.7", "Large lowland rivers",
+#   "FRESHWATER", "F2", "Lakes", "F2.1", "Large permanent freshwater lakes",
+#   "FRESHWATER", "F2", "Lakes", "F2.2", "Small permanent freshwater lakes",
+#   "FRESHWATER", "F2", "Lakes", "F2.3", "Seasonal freshwater lakes",
+#   "FRESHWATER", "F2", "Lakes", "F2.4", "Freeze-thaw freshwater lakes",
+#   "FRESHWATER", "F2", "Lakes", "F2.5", "Ephemeral freshwater lakes",
+#   "FRESHWATER", "F2", "Lakes", "F2.6", "Permanent salt and soda lakes",
+#   "FRESHWATER", "F2", "Lakes", "F2.7", "Ephemeral salt lakes",
+#   "FRESHWATER", "F2", "Lakes", "F2.8", "Artesian springs and oases",
+#   "FRESHWATER", "F2", "Lakes", "F2.9", "Geothermal pools and wetlands",
+#   "FRESHWATER", "F2", "Lakes", "F2.10", "Subglacial lakes",
+#   "FRESHWATER", "F3", "Artificial fresh waters", "F3.1", "Large reservoirs",
+#   "FRESHWATER", "F3", "Artificial fresh waters", "F3.2", "Constructed lacustrine wetlands",
+#   "FRESHWATER", "F3", "Artificial fresh waters", "F3.3", "Rice paddies",
+#   "FRESHWATER", "F3", "Artificial fresh waters", "F3.4", "Freshwater aquafarms",
+#   "FRESHWATER", "F3", "Artificial fresh waters", "F3.5", "Canals, ditches and drains",
+#   "FRESHWATER-MARINE", "FM1", "Semi-confined transitional waters", "FM1.1", "Deepwater coastal inlets",
+#   "FRESHWATER-MARINE", "FM1", "Semi-confined transitional waters", "FM1.2", "Permanently open riverine estuaries and bays",
+#   "FRESHWATER-MARINE", "FM1", "Semi-confined transitional waters", "FM1.3", "Intermittently closed and open lakes and lagoons",
+#   "MARINE", "M", "Marine shelfs", "M1.1", "Seagrass meadows",
+#   "MARINE", "M", "Marine shelfs", "M1.2", "Kelp forests",
+#   "MARINE", "M", "Marine shelfs", "M1.3", "Photic coral reefs",
+#   "MARINE", "M", "Marine shelfs", "M1.4", "Shellfish beds and reefs",
+#   "MARINE", "M", "Marine shelfs", "M1.5", "Photo-limited marine animal forests",
+#   "MARINE", "M", "Marine shelfs", "M1.6", "Subtidal rocky reefs",
+#   "MARINE", "M", "Marine shelfs", "M1.7", "Subtidal sand beds",
+#   "MARINE", "M", "Marine shelfs", "M1.8", "Subtidal mud plains",
+#   "MARINE", "M", "Marine shelfs", "M1.9", "Upwelling zones",
+#   "MARINE", "M2", "Pelagic ocean waters", "M2.1", "Epipelagic ocean waters",
+#   "MARINE", "M2", "Pelagic ocean waters", "M2.2", "Mesopelagic ocean waters",
+#   "MARINE", "M2", "Pelagic ocean waters", "M2.3", "Bathypelagic ocean waters",
+#   "MARINE", "M2", "Pelagic ocean waters", "M2.4", "Abyssopelagic ocean waters",
+#   "MARINE", "M2", "Pelagic ocean waters", "M2.5", "Sea ice",
+#   "MARINE", "M3", "Deep sea floors", "M3.1", "Continental and island slopes",
+#   "MARINE", "M3", "Deep sea floors", "M3.2", "Marine canyons",
+#   "MARINE", "M3", "Deep sea floors", "M3.3", "Abyssal plains",
+#   "MARINE", "M3", "Deep sea floors", "M3.4", "Seamounts, ridges and plateaus",
+#   "MARINE", "M3", "Deep sea floors", "M3.5", "Deepwater biogenic beds",
+#   "MARINE", "M3", "Deep sea floors", "M3.6", "Hadal trenches and troughs",
+#   "MARINE", "M3", "Deep sea floors", "M3.7", "Chemosynthetically-based ecosystems",
+#   "MARINE", "M4", "Anthropogenic marine systems", "M4.1", "Submerged artificial structures",
+#   "MARINE", "M4", "Anthropogenic marine systems", "M4.2", "Marine aquafarms",
+#   "MARINE-TERRESTRIAL", "MT1", "Shoreline systems", "MT1.1", "Rocky shores",
+#   "MARINE-TERRESTRIAL", "MT1", "Shoreline systems", "MT1.2", "Muddy shores",
+#   "MARINE-TERRESTRIAL", "MT1", "Shoreline systems", "MT1.3", "Sandy shores",
+#   "MARINE-TERRESTRIAL", "MT1", "Shoreline systems", "MT1.4", "Boulder and cobble shores",
+#   "MARINE-TERRESTRIAL", "MT1", "Shoreline systems", "MT2.1", "Coastal shrublands and grasslands",
+#   "MARINE-TERRESTRIAL", "MT1", "Shoreline systems", "MT3.1", "Artificial shores",
+#   "MARINE-FRESHWATER-TERRESTRIAL", "MFT1", "Brackish tidal systems", "MFT1.1", "Coastal river deltas",
+#   "MARINE-FRESHWATER-TERRESTRIAL", "MFT1", "Brackish tidal systems", "MFT1.2", "Intertidal forests and shrublands",
+#   "MARINE-FRESHWATER-TERRESTRIAL", "MFT1", "Brackish tidal systems", "MFT1.3", "Coastal saltmarshes and reedbeds",
+# )
+# 
+# # ---------------------------
+# # 5. Manually match broad terms to IUCN list
+# # ---------------------------
+# 
+# # Create lookup table: specific ecosystem IUCN Biome
+# 
+# lookup_specific_to_iucn_biome <- tibble(
+#   ecosystem_type_specific = c(
+# 
+#     # tropical forest terms
+# 
+#     "lowland humid tropical forest",
+#     "tall evergreen forest",
+#     "upland forest",
+#     "tropical rainforest",
+#     "miombo woodland",
+#     "pine forest",
+#     "boreal forest",
+# 
+# 
+# 
+# 
+#     # Wetland-related
+#     "vernal pool",
+#     "peatland",
+#     "seasonal pond",
+#     "forested wetland",
+# 
+#     # Coastal/marine
+#     "salt marsh",
+#     "mangrove forest",
+#     "seagrass meadow",
+#     "tidal marsh",
+# 
+#     # Grassland/Savanna
+#     "prairie",
+#     "tropical savanna",
+#     "grassland",
+# 
+#     # Freshwater
+#     "riverine",
+#     "perennial stream",
+#     "lacustrine shore"
+#   ),
+#   Biome = c(
+#     # Forest
+#     "Tropical-subtropical forests",
+#     "Tropical-subtropical forests",
+#     "Temperate-boreal forests & woodlands",
+#     "Tropical-subtropical forests",
+#     "Savannas and grasslands",
+#     "Temperate-boreal forests & woodlands",
+#     "Temperate-boreal forests & woodlands",
+# 
+#     # Wetland
+#     "Palustrine wetlands",
+#     "Palustrine wetlands",
+#     "Palustrine wetlands",
+#     "Palustrine wetlands",
+# 
+#     # Coastal/marine
+#     "Marine shelfs",
+#     "Brackish tidal systems",
+#     "Marine shelfs",
+#     "Brackish tidal systems",
+# 
+#     # Grassland/Savanna
+#     "Savannas and grasslands",
+#     "Savannas and grasslands",
+#     "Savannas and grasslands",
+# 
+#     # Freshwater
+#     "Rivers and streams",
+#     "Rivers and streams",
+#     "Lakes"
+#   )
+# )
 
