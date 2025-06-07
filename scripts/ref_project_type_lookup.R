@@ -9,8 +9,10 @@
 # 1. Load packages
 # ---------------------------
 
+library(readxl)    # Read Excel files
 library(tidyverse) # data manipulation
 library(here) # construct relative file paths for easier saving
+library(janitor) # clean column names 
 
 # ---------------------------
 # 2. Load and preprocess data
@@ -28,11 +30,11 @@ incomplete_project_rows <- data %>%
   )
 
 # View if any problematic rows exist
-if (nrow(incomplete_ecosystem_rows) > 0) {
-  warning("Some rows have inconsistent ecosystem information (specific or broad is missing).")
-  print(incomplete_ecosystem_rows)
+if (nrow(incomplete_project_rows) > 0) {
+  warning("Some rows have inconsistent project information (intervention types missing).")
+  print(incomplete_project_rows)
 } else {
-  message("✅ All ecosystem_type_specific entries have corresponding ecosystem_type_broad values (and vice versa).")
+  message("All entries have corresponding type ")
 }
 
 # ---------------------------
@@ -189,8 +191,7 @@ misc_comp_terms <- c(
   "threat management",
   "weed control",
   "pest control",
-  "land conversion",
-  "seagrass mitigation"
+  "land conversion"
 )
 
 # ---------------------------
@@ -234,12 +235,28 @@ project_mapped <- data %>%
     )
   )
 
-# find unmapped terms
-unmapped_terms <- unmapped_project_types %>%
-  anti_join(lookup_intervention_type, by = "project_type_specific")
+# List unmapped rows
+unmapped_project_types <- project_mapped %>%
+  filter(is.na(intervention_type)) %>%
+  distinct(project_type_specific) %>%
+  arrange(project_type_specific)
 
 # Find any duplicates 
 lookup_intervention_type %>%
   count(project_type_specific, sort = TRUE) %>%
   filter(n > 1)
+
+# ---------------------------
+# 7. Save project type lookup table
+# ---------------------------
+
+# Save to directory, make one if does not exist
+output_dir <- here("data", "reference")
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+
+# save file to path and write to csv
+output_path <- file.path(output_dir, "project_intervention_type_lookup.csv")
+write_csv(lookup_intervention_type, output_path)
 
