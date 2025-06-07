@@ -59,6 +59,10 @@ region_aliases <- tribble(
   "Quebec",                   "Québec"
 )
 
+# save aliases
+write_csv(country_aliases, here("data", "reference", "country_aliases.csv"))
+write_csv(region_aliases, here("data", "reference", "region_aliases.csv"))
+
 # Custom entries (supranational, continents, regions)
 custom_entries <- tribble(
   ~country,              ~subnational_region, ~subnational_region_type,
