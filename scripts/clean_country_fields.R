@@ -50,6 +50,7 @@ exploded <- exploded %>%
 # ---------------------------
 # 5. Join to validated lookup and keep only valid rows
 # ---------------------------
+
 cleaned <- exploded %>%
   inner_join(validated_lookup, by = c("country", "subnational_region", "subnational_region_type"))
 
