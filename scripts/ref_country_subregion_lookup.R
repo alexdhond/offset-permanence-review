@@ -73,6 +73,7 @@ custom_entries <- tribble(
   "Scandinavia",         NA_character_,       "Cultural Region",
   "Sub-Saharan Africa",  NA_character_,       "Region",
   "Asia",                NA_character_,       "Continent",
+  "Africa",                NA_character_,       "Continent",
   "West Africa",         NA_character_,       "Region"
 )
 
@@ -184,3 +185,12 @@ unmatched_review <- unmatched %>%
 write_csv(unmatched, here("data", "reference", "unmatched_country_region.csv"))
 
 write_csv(validated, here("data", "reference", "validated_country_region_lookup.csv"))
+
+
+
+
+
+
+
+
+
