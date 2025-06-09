@@ -1,5 +1,5 @@
 # ===============================================
-# Script:     ref_country_subregion_lookup.R
+# Script:     01_ref_country_subregion_lookup.R
 # Date:       2025-05-30
 # Author:     Alex Dhond
 # Purpose:    Explode and validate country/subnational region pairs
@@ -185,12 +185,4 @@ unmatched_review <- unmatched %>%
 write_csv(unmatched, here("data", "reference", "unmatched_country_region.csv"))
 
 write_csv(validated, here("data", "reference", "validated_country_region_lookup.csv"))
-
-
-
-
-
-
-
-
 
