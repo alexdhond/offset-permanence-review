@@ -8,18 +8,22 @@
 # ---------------------------
 # 1. Load packages
 # ---------------------------
-library(tidyverse)
-library(readxl)
-library(here)
-library(janitor)
+
+library(tidyverse) # Data manipulation
+library(readxl) # Read Excel files
+library(here) # Easy path names
+library(janitor) # Clean column names
 
 # ---------------------------
 # 2. Load raw data and lookups
 # ---------------------------
-raw_data <- read_excel(here("data", "offset_perm_rev_database.xlsx")) %>%
+
+# Load raw data
+data <- read_excel(here("data", "offset_perm_rev_database.xlsx")) %>%
   clean_names() %>%
   mutate(row_id = row_number()) # for rejoining later
 
+# Load lookup and alias tables
 country_aliases <- read_csv(here("data", "reference", "country_aliases.csv"))
 region_aliases  <- read_csv(here("data", "reference", "region_aliases.csv"))
 validated_lookup <- read_csv(here("data", "reference", "validated_country_region_lookup.csv"))
@@ -27,7 +31,8 @@ validated_lookup <- read_csv(here("data", "reference", "validated_country_region
 # ---------------------------
 # 3. Explode semicolon-delimited fields
 # ---------------------------
-exploded <- raw_data %>%
+
+exploded <- data %>%
   select(study_title, row_id, country, subnational_region, subnational_region_type) %>%
   mutate(across(everything(), ~ str_split(., ";\\s*"))) %>%
   unnest_longer(country) %>%
