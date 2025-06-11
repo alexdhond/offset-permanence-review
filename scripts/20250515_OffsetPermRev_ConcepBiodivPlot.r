@@ -10,6 +10,7 @@
 #-----------------------------
 
 library(ggplot2)   # Plotting
+library(patchwork) # Combining plots
 library(dplyr)     # Data manipulation
 library(scales)    # Scale transformations
 library(purrr)     # Functional iteration
@@ -183,6 +184,9 @@ if (length(missing_colors) > 0) {
 #-----------------------------
 # Plot Function
 #-----------------------------
+# -----------------------------
+# Plot Function (Modified to be more general)
+# -----------------------------
 plot_offset_trajectories <- function(df, log_scale = TRUE, facet = FALSE, focal = NULL, show_title = TRUE) {
   scenarios <- unique(df$scenario)
   
@@ -199,7 +203,7 @@ plot_offset_trajectories <- function(df, log_scale = TRUE, facet = FALSE, focal 
   # Style settings
   alpha_vals <- setNames(rep(1, length(style_ids)), style_ids)
   linewidth_vals <- setNames(rep(1.2, length(style_ids)), style_ids)
-
+  
   p <- ggplot(df, aes(
     x = time,
     y = biodiversity,
@@ -218,7 +222,7 @@ plot_offset_trajectories <- function(df, log_scale = TRUE, facet = FALSE, focal 
       "Rising" = "solid",
       "Declining (No Protection)" = "dotted")) +
     labs(
-      title = if (show_title) {
+      title = if (show_title) { # Title for individual plot
         if (!is.null(focal)) {
           focal
         } else if (length(unique(df$scenario)) == 1) {
@@ -229,13 +233,15 @@ plot_offset_trajectories <- function(df, log_scale = TRUE, facet = FALSE, focal 
           "Offset Trajectories"
         }
       } else NULL,
-      x = if (log_scale) "Time (log scale)" else "Time",
-      y = "Relative Biodiversity"
+      x = "Time", # Default X axis title
+      y = "Relative Biodiversity" # Default Y axis title
     ) +
-    theme_minimal(base_size = 13) +
+    theme_minimal(base_size = 18) + # Increased base_size for all text elements
     theme(
-      plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
+      plot.title = element_text(face = "bold", size = 18, hjust = 0.5), # Adjust specific elements if needed
       legend.position = if (facet) "none" else "bottom"
+      # REMOVED: axis.title.x = element_blank(), axis.title.y = element_blank(), etc.
+      # We will control these externally now
     )
   
   p <- p + if (facet) facet_wrap(~scenario, ncol = 2) else NULL
@@ -308,6 +314,133 @@ print(plot_hr)
 print(plot_al)
 
 
+# -----------------------------
+# Preview plots (Modified for specific axis labels and all numbers/ticks)
+# -----------------------------
+baseline_color <- "#1f78b4"  # Dark blue
+
+# Habitat Creation (plot_hc) - Will have Y-axis title and visible Y-axis numbers/ticks
+plot_hc <- plot_offset_trajectories(
+  df_all %>% filter(scenario == "Habitat Creation"),
+  log_scale = FALSE,
+  show_title = TRUE
+) +
+  scale_color_manual(values = c("Habitat Creation.Actual.Baseline" = baseline_color)) +
+  scale_linetype_manual(values = c("Baseline" = "solid")) +
+  ylim(0, 100) +
+  labs(y = "Relative Biodiversity") + # Add Y-axis title for this specific plot
+  theme(
+    axis.title.y = element_text(size = 20  , margin = margin(r = 10)), # Make Y title visible
+    axis.text.y = element_text(size = 16), # Make Y tick labels visible and set size
+    axis.ticks.y = element_line(size = 0.5), # Make Y ticks visible
+    # Ensure X-axis elements are hidden
+    axis.title.x = element_blank(),
+    plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm") # Reduce margins
+  )+
+  theme_minimal()
+
+# Habitat Restoration (plot_hr) - Will have X-axis title and visible X-axis numbers/ticks
+plot_hr <- plot_offset_trajectories(
+  df_all %>% filter(scenario == "Habitat Restoration"),
+  log_scale = FALSE,
+  show_title = TRUE
+) +
+  scale_color_manual(values = c("Habitat Restoration.Actual.Baseline" = "#1f78b4")) +
+  scale_linetype_manual(values = c("Baseline" = "solid")) +
+  ylim(0, 100) +
+  labs(x = "Time") + # Add X-axis title for this specific plot
+  theme(
+    axis.title.x = element_text(size = 20, margin = margin(t = 10)), # Make X title visible
+    axis.text.x = element_text(size = 16), # Make X tick labels visible and set size
+    axis.ticks.x = element_line(size = 0.5), # Make X ticks visible
+    # Ensure Y-axis elements are hidden
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(), # Hide Y-axis tick labels for this panel
+    axis.ticks.y = element_blank(), # Hide Y-axis ticks for this panel
+    plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm") # Reduce margins
+  )+
+  theme_minimal()
+
+# Avoided Loss (plot_al) - Will have visible X and Y axis numbers/ticks, but no titles
+plot_al <- plot_offset_trajectories(
+  df_all %>% filter(scenario == "Avoided Loss"),
+  log_scale = FALSE,
+  show_title = TRUE
+) +
+  scale_color_manual(values = c("Avoided Loss.Actual.Flat" = baseline_color,
+                                "Avoided Loss.Actual.Rising" = baseline_color,
+                                "Avoided Loss.Counterfactual.Declining (No Protection)" = baseline_color)) +
+  scale_linetype_manual(values = linetype_map_al) +
+  ylim(0, 100) +
+  labs(x = NULL, y = NULL) + # Ensure no axis titles for this plot
+  theme(
+    # Make X and Y axis text (numbers) and ticks visible
+    axis.text.x = element_text(size = 16), # X tick labels visible
+    axis.ticks.x = element_line(size = 0.5), # X ticks visible
+    axis.text.y = element_text(size = 16), # Y tick labels visible
+    axis.ticks.y = element_line(size = 0.5), # Y ticks visible
+    # Ensure axis titles are hidden (already done by labs(x=NULL, y=NULL))
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm") # Reduce margins
+  )+
+  theme_minimal()
+# -----------------------------
+# Combine plots into a three-panel figure
+# -----------------------------
+
+
+
+# Combine the three baseline plots
+# Combine the three baseline plots
+combined_baseline_plot <- (plot_hc + plot_hr + plot_al) +
+  plot_layout(
+    ncol = 3,
+    guides = 'collect',
+    widths = c(1, 1, 1) # Equal width for each plot
+    # Adjust spacing between plots: negative values pull them closer
+    # Unit can be "cm", "in", "mm", etc.
+    # Play with these values to get the desired closeness
+    # For example, to make them closer, try a small positive value like 0.1cm or even negative
+    # Example: you want to keep them close, so maybe a very small positive or zero
+    # For closer plots, theme(plot.margin) below might be more effective
+    # or you might want to adjust `design` for more control over space.
+    # For now, we'll primarily use `theme(plot.margin)` on individual plots
+  ) &
+  theme(
+    legend.position = 'bottom',
+    # Reduce margins of individual plots to bring them closer
+    plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm") # Top, Right, Bottom, Left margins
+  )+
+  theme_minimal()
+combined_baseline_plot
+
+# Add an overall title and common axis labels to the combined plot
+final_combined_plot <- combined_baseline_plot +
+  plot_annotation(
+    tag_levels = 'A', # Add A, B, C tags to subplots
+    theme = theme(
+      plot.title = element_text(face = "bold", size = 20, hjust = 0.5), # Increased main title size
+      plot.tag = element_text(face = "bold", size = 20) # Increased A, B, C tag size
+    )
+  ) +
+  # You might want to adjust the size of these common axis titles as well
+  theme_minimal(
+    axis.title.x = element_text(size = 18, margin = margin(t = 10)), # Increased common X axis title size, added margin
+    axis.title.y = element_text(size = 18, margin = margin(r = 10))  # Increased common Y axis title size, added margin
+  )
+final_combined_plot
+
+# -----------------------------
+# Export the combined plot
+# -----------------------------
+ggsave(
+  filename = here("output", "figures", "combined_baseline_scenarios.png"),
+  plot = final_combined_plot,
+  width = 15, # Adjust width as needed for a three-panel plot
+  height = 6, # Adjust height as needed
+  dpi = 300
+)
 
 #-----------------------------
 # Export plots
