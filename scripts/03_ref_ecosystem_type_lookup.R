@@ -40,7 +40,7 @@ if (nrow(incomplete_ecosystem_rows) > 0) {
 
 # Select only ecosystem columns
 ecosystem <- data %>%
-  select(ecosystem_type_specific, ecosystem_type_broad)
+  select(study_title, ecosystem_type_specific, ecosystem_type_broad)
 
 # Explode and filter columns to get all possible combinations (will have incorrect combos)
 df_ecosystem <- ecosystem %>%
@@ -183,7 +183,12 @@ forest_terms <- c(
   "tall evergreen forest",
   "scattered trees",
   "riverine forest",
-  "riparian forest habitat"
+  "riparian forest habitat",
+  "closed-canopy evergreen forest",
+  "managed forest",
+  "evergreen humid tropical forest",
+  "plantation",
+  "native vegetation"
 )
 
 # Wetland terms
@@ -231,7 +236,8 @@ wetland_terms <- c(
   "palustrine aquatic bed",
   "palustrine shore",
   "riparian wetland",
-  "unidentified wetland"
+  "unidentified wetland",
+  "hemi-marsh"
 )
 
 # Grassland terms
@@ -277,7 +283,12 @@ coastal_marine_terms <- c(
   "intertidal habitat",
   "marine habitat",
   "estuarine island",
-  "intertidal wetland"
+  "intertidal wetland",
+  "mangrove",
+  "seagrass",
+  "seagrass bed",
+  "tidal wetland",
+  "artificial salt-marsh"
 )
 
 # Freshwater terms
@@ -300,7 +311,10 @@ freshwater_terms <- c(
   "waterbody",
   "perennial stream",
   "in-channel habitat",
-  "off-channel habitat"
+  "off-channel habitat",
+  "in-channel fluvial habitat",
+  "off-channel fluvial habitat",
+  "riverine habitat"
   
 )
 
@@ -373,10 +387,10 @@ lookup_specific_to_broad %>%
 # 8. Apply lookup to dataset
 # ---------------------------
 
-# data_ecosystem_mapped <- data %>%
-#   select(study_title, ecosystem_type_specific) %>%
-#   separate_rows(ecosystem_type_specific, sep = ";\\s*") %>%
-#   left_join(lookup_specific_to_broad, by = "ecosystem_type_specific")
+data_ecosystem_mapped <- data %>%
+  select(study_title, ecosystem_type_specific) %>%
+  separate_rows(ecosystem_type_specific, sep = ";\\s*") %>%
+  left_join(lookup_specific_to_broad, by = "ecosystem_type_specific")
 
 # ---------------------------
 # 9. Save ecosystem lookup table
@@ -511,81 +525,3 @@ write_csv(lookup_specific_to_broad, output_path)
 #   "MARINE-FRESHWATER-TERRESTRIAL", "MFT1", "Brackish tidal systems", "MFT1.3", "Coastal saltmarshes and reedbeds",
 # )
 # 
-# # ---------------------------
-# # 5. Manually match broad terms to IUCN list
-# # ---------------------------
-# 
-# # Create lookup table: specific ecosystem IUCN Biome
-# 
-# lookup_specific_to_iucn_biome <- tibble(
-#   ecosystem_type_specific = c(
-# 
-#     # tropical forest terms
-# 
-#     "lowland humid tropical forest",
-#     "tall evergreen forest",
-#     "upland forest",
-#     "tropical rainforest",
-#     "miombo woodland",
-#     "pine forest",
-#     "boreal forest",
-# 
-# 
-# 
-# 
-#     # Wetland-related
-#     "vernal pool",
-#     "peatland",
-#     "seasonal pond",
-#     "forested wetland",
-# 
-#     # Coastal/marine
-#     "salt marsh",
-#     "mangrove forest",
-#     "seagrass meadow",
-#     "tidal marsh",
-# 
-#     # Grassland/Savanna
-#     "prairie",
-#     "tropical savanna",
-#     "grassland",
-# 
-#     # Freshwater
-#     "riverine",
-#     "perennial stream",
-#     "lacustrine shore"
-#   ),
-#   Biome = c(
-#     # Forest
-#     "Tropical-subtropical forests",
-#     "Tropical-subtropical forests",
-#     "Temperate-boreal forests & woodlands",
-#     "Tropical-subtropical forests",
-#     "Savannas and grasslands",
-#     "Temperate-boreal forests & woodlands",
-#     "Temperate-boreal forests & woodlands",
-# 
-#     # Wetland
-#     "Palustrine wetlands",
-#     "Palustrine wetlands",
-#     "Palustrine wetlands",
-#     "Palustrine wetlands",
-# 
-#     # Coastal/marine
-#     "Marine shelfs",
-#     "Brackish tidal systems",
-#     "Marine shelfs",
-#     "Brackish tidal systems",
-# 
-#     # Grassland/Savanna
-#     "Savannas and grasslands",
-#     "Savannas and grasslands",
-#     "Savannas and grasslands",
-# 
-#     # Freshwater
-#     "Rivers and streams",
-#     "Rivers and streams",
-#     "Lakes"
-#   )
-# )
-
