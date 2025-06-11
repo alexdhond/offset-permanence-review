@@ -1,5 +1,5 @@
 # ================================================================
-# Script:     database_information_extraction.R
+# Script:     00_database_information_extraction.R
 # Date:       2025-05-30
 # Author:     Alex Dhond
 # Purpose:    Extract key info from database
