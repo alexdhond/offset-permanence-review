@@ -134,12 +134,10 @@ lookup_intervention_type <- purrr::map2_dfr(
   names(intervention_categories),
   intervention_categories,
   ~ tibble(
-    project_type_specific = .y,
+    project_type_specific = str_to_lower(str_trim(.y)),
     intervention_type = .x
   )
 )
-
-lookup_intervention_type <- 
 
 # ---------------------------
 # 6. Map project types and flag unmapped terms
@@ -178,14 +176,19 @@ na_specific_rows <- project_mapped %>%
 print(unmapped_rows)
 print(na_specific_rows)
 
+
 # ---------------------------
-# 7. Save lookup table
+# 7. Save cleaned lookup table
 # ---------------------------
+
+project_type_lookup_clean <- lookup_intervention_type %>%
+  distinct(project_type_specific, intervention_type) %>%
+  arrange(intervention_type, project_type_specific)
 
 output_dir <- here("data", "reference")
 if (!dir.exists(output_dir)) {
   dir.create(output_dir, recursive = TRUE)
 }
 
-write_csv(lookup_intervention_type, file.path(output_dir, "project_intervention_type_lookup.csv"))
-message("✅ Lookup table written: project_intervention_type_lookup.csv")
+write_csv(project_type_lookup_clean, file.path(output_dir, "project_intervention_type_lookup.csv"))
+message("✅ Cleaned lookup table written: project_intervention_type_lookup.csv")
