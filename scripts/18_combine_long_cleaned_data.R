@@ -1,5 +1,5 @@
 # ================================================================
-# Script:     10_combine_long_cleaned_data.R
+# Script:     18_combine_long_cleaned_data.R
 # Date:       2025-06-11
 # Author:     Alex Dhond
 # Purpose:    Join cleaned long-format datasets and run diagnostics
@@ -177,5 +177,8 @@ final_df <- joined_df %>%
 
 output_dir <- here("data", "derived")
 if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
-write_csv(final_df, output_path, "offset_perm_rev_long_cleaned.csv")
+
+# Correct: build full path using file.path()
+write_csv(final_df, file.path(output_dir, "offset_perm_rev_long_cleaned.csv"))
+
 message("✅ Cleaned and renamed long-format dataset saved to 'data/derived/offset_perm_rev_long_cleaned.csv'")

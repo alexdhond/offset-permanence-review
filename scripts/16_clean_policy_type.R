@@ -1,5 +1,5 @@
 # ================================================================
-# Script:     clean_policy_type.R
+# Script:     16_clean_policy_type.R
 # Date:       2025-06-11
 # Author:     Alex Dhond
 # Purpose:    Clean and standardize policy names and extract

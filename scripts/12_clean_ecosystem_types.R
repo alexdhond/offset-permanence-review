@@ -1,5 +1,5 @@
 # ================================================================
-# Script:     clean_ecosystem_types.R
+# Script:     12_clean_ecosystem_types.R
 # Date:       2025-06-11
 # Author:     Alex Dhond
 # Purpose:    Clean and standardize ecosystem_type_specific and 
