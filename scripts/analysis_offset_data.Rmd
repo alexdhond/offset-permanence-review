@@ -1,0 +1,36 @@
+---
+title: "analysis_offset_data"
+author: "Alex Dhond"
+date: "2025-06-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(here)
+
+# Load cleaned data
+final_df <- read_csv(here("data", "derived", "offset_perm_rev_long_cleaned.csv"))
+
+```
+
+## Summary Statistics
+
+```{r summary}
+final_df %>% 
+  count(program_type, sort = TRUE)
+
+
+final_df %>%
+  count(program_type) %>%
+  ggplot(aes(x = reorder(program_type, n), y = n)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Frequency of Program Types", x = "Program Type", y = "Count")
+
+final_df %>%
+  count(permanence_risk_domain, permanence_risk_category) %>%
+  arrange(desc(n))
+```
