@@ -1,0 +1,173 @@
+---
+title: "Permanence Risks Analysis"
+author: "Alex Dhond"
+format: html
+editor: visual
+---
+
+I am going use this document as a data exploration and analysis tool.
+
+# Setup
+
+## Load packages
+
+```{r}
+# Load packages
+library(tidyverse) # Data manipulation
+library(here) # Easy file paths
+library(janitor) # Clean columns
+library(readxl) # Reading excel files
+library(countrycode)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(scatterpie)
+library(RColorBrewer)
+library(knitr)
+library(gt)
+library(treemap)
+
+# Set global chunk options
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+```
+
+## Load functions
+
+```{r}
+# Create a function to summarize how many unique studies mention each value of a given variable
+summarize_by_study <- function(data, var, label = NULL) {
+  
+  # Capture the variable passed in (unquoted) using tidy evaluation
+  var <- rlang::enquo(var)
+  
+  # If no label is supplied, use the name of the variable as the default
+  label <- label %||% rlang::as_name(var)
+
+  # Perform the summary
+  data %>%
+    # Remove rows where the variable is missing or empty
+    filter(!is.na(!!var), !!var != "") %>%
+    
+    # Group by the variable of interest (e.g., permanence_risk_type)
+    group_by(!!var) %>%
+    
+    # Count the number of unique studies for each group
+    summarise(n_studies = n_distinct(study_title), .groups = "drop") %>%
+    
+    # Sort by number of studies, descending
+    arrange(desc(n_studies)) %>%
+    
+    # Rename the grouped variable to the user-specified label (or keep original name)
+    rename(!!label := !!var)
+}
+
+```
+
+## Load data
+
+```{r}
+# Load cleaned dataset
+final_df <- read_csv(here("data", "derived", "offset_perm_rev_long_cleaned.csv"))
+
+# Add continent
+final_df <- final_df %>%
+  mutate(continent = countrycode(country, origin = "country.name", destination = "continent")) %>%
+  mutate(continent = case_when(
+    is.na(continent) & str_detect(country, "Africa")         ~ "Africa",
+    is.na(continent) & str_detect(country, "Asia")           ~ "Asia",
+    is.na(continent) & str_detect(country, "Europe")         ~ "Europe",
+    is.na(continent) & str_detect(country, "Latin America")  ~ "South America",
+    is.na(continent) & str_detect(country, "European Union") ~ "Europe",
+    TRUE ~ continent
+  ))
+
+```
+
+# Data Exploration
+
+```{r}
+summary_table <- tibble(
+  `Metric` = c(
+    "Unique studies in dataset",
+    "Countries represented",
+    "Focal species",
+    "Ecosystem types (specific)",
+    "Ecosystem types (broad)",
+    "Delivery types",
+    "Offset program types",
+    "Policy types",
+    "Policy jurisdictions",
+    "Permanence risk domains",
+    "Permanence risk categories",
+    "Permanence risk types",
+    "Study publication years",
+    "Evidence types"
+  ),
+  `Count` = c(
+    n_distinct(final_df$study_title),
+    n_distinct(final_df$country),
+    n_distinct(final_df$species_common_name),
+    n_distinct(final_df$ecosystem_type),
+    n_distinct(final_df$ecosystem_broad_type),
+    n_distinct(final_df$delivery_type),
+    n_distinct(final_df$program_type),
+    n_distinct(final_df$policy_type),
+    n_distinct(final_df$policy_jurisdiction_level),
+    n_distinct(final_df$permanence_risk_domain),
+    n_distinct(final_df$permanence_risk_category),
+    n_distinct(final_df$permanence_risk_type),
+    n_distinct(final_df$study_publication_year),
+    n_distinct(final_df$study_evidence_type)
+  )
+)
+
+kable(summary_table, caption = "Expanded Summary of Offset Review Dataset")
+
+```
+
+## Permanence Risks
+
+```{r}
+permanence_summary_table <- final_df %>%
+  filter(!is.na(permanence_risk_type)) %>%
+  distinct(study_title, permanence_risk_domain, permanence_risk_category, permanence_risk_type) %>%
+  count(permanence_risk_domain, permanence_risk_category, permanence_risk_type, name = "n_studies") %>%
+  arrange(desc(n_studies)) %>%
+  gt() %>%
+  tab_header(title = "Permanence Risks by Domain, Category, and Type") %>%
+  cols_label(
+    permanence_risk_domain = "Domain",
+    permanence_risk_category = "Category",
+    permanence_risk_type = "Type",
+    n_studies = "Study Count"
+  )
+
+permanence_summary_table
+
+```
+
+```{r}
+#| label: top-5-permanence-risks
+#| include: false
+
+top_risks <- final_df %>%
+  filter(!is.na(permanence_risk_type)) %>%
+  distinct(study_title, permanence_risk_type) %>%
+  count(permanence_risk_type, sort = TRUE) %>%
+  slice_head(n = 5)
+```
+
+The most common permanence risk identified was **`r top_risks$permanence_risk_type[[1]]`**, 
+which appeared in `r top_risks$n[[1]]` studies. 
+
+This was followed by **`r top_risks$permanence_risk_type[[2]]`** (`r top_risks$n[[2]]` studies), **`r top_risks$permanence_risk_type[[3]]`** (`r top_risks$n[[3]]` studies), **`r top_risks$permanence_risk_type[[4]]`** (`r top_risks$n[[4]]` studies), and **`r top_risks$permanence_risk_type[[5]]`** (`r top_risks$n[[5]]` studies).
+
+
+
+## Explore study categories
+
+```{r}
+summarize_by_study(final_df, permanence_risk_type)
+
+```
