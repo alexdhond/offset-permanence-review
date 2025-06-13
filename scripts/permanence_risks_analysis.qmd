@@ -5,13 +5,15 @@ format: html
 editor: visual
 ---
 
-I am going use this document as a data exploration and analysis tool.
+# Offset Permanence Review Data Exploration
 
-# Setup
+Load the permanence review raw data, explore categories, and run analyses
 
-## Load packages
+## Setup
 
-```{r}
+### Load packages
+
+```{r, include=FALSE}
 # Load packages
 library(tidyverse) # Data manipulation
 library(here) # Easy file paths
@@ -26,15 +28,16 @@ library(RColorBrewer)
 library(knitr)
 library(gt)
 library(treemap)
+library(forcats)
 
 # Set global chunk options
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 
 ```
 
-## Load functions
+### Load functions
 
-```{r}
+```{r, include=FALSE}
 # Create a function to summarize how many unique studies mention each value of a given variable
 summarize_by_study <- function(data, var, label = NULL) {
   
@@ -64,13 +67,13 @@ summarize_by_study <- function(data, var, label = NULL) {
 
 ```
 
-## Load data
+### Load data
 
-```{r}
+```{r, include=FALSE}
 # Load cleaned dataset
 final_df <- read_csv(here("data", "derived", "offset_perm_rev_long_cleaned.csv"))
 
-# Add continent
+### Add continent to final dataset
 final_df <- final_df %>%
   mutate(continent = countrycode(country, origin = "country.name", destination = "continent")) %>%
   mutate(continent = case_when(
@@ -82,16 +85,57 @@ final_df <- final_df %>%
     TRUE ~ continent
   ))
 
+# Load risk typology
+risk_typology <- read_csv(here::here("data", "reference", "permanence_risk_typology_lookup.csv")) %>%
+  janitor::clean_names() %>%
+  select(domain = broad, category = specific, type = sub_risk)
 ```
 
-# Data Exploration
+### Update data
 
-```{r}
+```{r, include=FALSE}
+# Add continent manually for consistent values
+final_df <- final_df %>%
+  mutate(continent = case_when(
+    
+    # North America
+    country %in% c("United States of America", "Canada", "Mexico") ~ "North America",
+    
+    # South America
+    country %in% c("Brazil", "Bolivia", "Peru", "Colombia", "Costa Rica", "Latin America") ~ "South America",
+    
+    # Europe
+    country %in% c("United Kingdom", "Germany", "France", "Italy", "Netherlands", "Sweden",
+                   "European Union", "Europe") ~ "Europe",
+    
+    # Africa
+    country %in% c("Nigeria", "Liberia", "Uganda", "Mozambique", "South Africa",
+                   "United Republic of Tanzania", "Madagascar", "Africa") ~ "Africa",
+    
+    # Asia
+    country %in% c("India", "China", "Indonesia", "Vietnam", "Cambodia", "Laos", "Malaysia",
+                   "Thailand", "Myanmar", "Philippines", "Asia") ~ "Asia",
+    
+    # Oceania
+    country %in% c("Australia", "New Zealand", "Papua New Guinea") ~ "Oceania",
+    
+    TRUE ~ NA_character_
+  ))
+
+```
+
+## Data exploration
+
+### Database overview
+
+Let's explore the database in general. How many of each variable do I have, and what do I want to show?
+
+```{r, echo=FALSE}
 summary_table <- tibble(
   `Metric` = c(
     "Unique studies in dataset",
     "Countries represented",
-    "Focal species",
+    "Focal species mentioned",
     "Ecosystem types (specific)",
     "Ecosystem types (broad)",
     "Delivery types",
@@ -122,8 +166,124 @@ summary_table <- tibble(
   )
 )
 
-kable(summary_table, caption = "Expanded Summary of Offset Review Dataset")
+kable(summary_table, caption = "Dataset Summary")
+```
 
+### Study type: biodiversity or carbon
+How many studies discussed biodiversity offsets and how many discussed carbon offsets?
+```{r}
+# Count unique studies for biodiversity and carbon offset categories
+offset_summary_table <- final_df %>%
+  # Filter for the specific offset categories of interest
+  filter(offset_category_general %in% c("biodiversity", "carbon")) %>%
+  # Group by the offset category
+  group_by(offset_category_general) %>%
+  # Count the number of unique studies for each category
+  summarise(n_unique_studies = n_distinct(study_title), .groups = "drop") %>%
+  # Rename the column for better readability in the table
+  rename(`Offset Category` = offset_category_general,
+         `Number of Studies` = n_unique_studies)
+
+# Print the table using kable for nice formatting in Quarto
+kable(offset_summary_table, caption = "Number of Studies by Offset Category")
+```
+
+### Evidence type
+
+How many of each evidence type do we have? As a reminder, I grouped studies into four categories:
+
+1.  Direct Empirical Studies: These assessed permanence risks through primary data collection, either by observing and documenting realized risks (e.g., offset site degradation), or empirically measuring conditions associated with permanence risks (e.g., encroachment, fire frequency). This included field-based assessments, project compliance evaluations, case study analysis, and single- or multi-project site examinations.
+
+2.  Modelling Studies: These evaluated permanence risks using quantitative modelling or simulations rather than direct field observation.
+
+3.  Review and Discussion-based Studies: These synthesized multiple sources to examine permanence risks more broadly and often incorporated both empirical evidence and theoretical insights.
+
+4.  Conceptual, Legal, and Policy-focused Studies: These explored permanence risks from governance, legal, policy, or theoretical perspectives, typically identifying risks through logical reasoning or policy analyses rather than empirical observation .
+
+```{r}
+# --- Summarize data: Unique studies by Evidence Type AND Offset Category ---
+# This step groups your 'final_df' by both chosen categories
+# and then counts the unique study titles in each combination.
+evidence_offset_summary <- final_df %>%
+  # It's good practice to filter out NA/empty values before grouping
+  filter(!is.na(study_evidence_type), !is.na(offset_category_general),
+         study_evidence_type != "", offset_category_general != "") %>%
+  # Group by both variables you want to split by
+  group_by(study_evidence_type, offset_category_general) %>%
+  # Summarise to get the count of unique studies for each group
+  summarise(n_studies = n_distinct(study_title), .groups = "drop") %>%
+  # Arrange the summary for better readability if printed, though ggplot will reorder
+  arrange(desc(n_studies))
+
+
+# --- Bar plot: Unique Studies by Evidence Type, split by Offset Category with counts on bars ---
+
+# Define a common dodge width to ensure text aligns with bars
+dodge_width <- 0.9
+
+ggplot(evidence_offset_summary,
+       aes(x = fct_reorder(study_evidence_type, n_studies, .fun = sum),
+           y = n_studies,
+           fill = offset_category_general)) +
+  geom_col(position = position_dodge(width = dodge_width), color = "black") + # Use position_dodge with defined width
+  geom_text(aes(label = n_studies), # Map 'n_studies' to the label aesthetic
+            position = position_dodge(width = dodge_width), # Use same dodge width for labels
+            hjust = 1.5, # Adjust horizontal justification (moves text right/left, positive for right when coord_flip)
+            size = 3,     # Adjust text size as needed
+            color = "black") + # Color of the text
+  labs(
+    title = "Number of Unique Studies by Evidence Type and Offset Category",
+    x = "Evidence Type",
+    y = "Number of Unique Studies",
+    fill = "Offset Category"
+  ) +
+  coord_flip() + # Flip coordinates
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  # Optional: Adjust plot margins to ensure labels are not cut off
+  theme(plot.margin = unit(c(1, 4, 1, 1), "lines")) # Top, Right, Bottom, Left margins
+
+# --- Resource type analysis ---
+# Counts how many entries (rows) mention each 'evidence_type'.
+# If you want to count *unique studies* per evidence_type, you'd use summarize_by_study().
+# For simple row counts, 'count' is sufficient.
+resource_counts <- summarize_by_study(final_df, study_evidence_type)
+
+print("Resource type counts:")
+print(resource_counts)
+
+# --- Bar plot of resource types ---
+# This plot shows the overall frequency of each 'evidence_type'.
+ggplot(resource_counts, aes(x = reorder(`study_evidence_type`, n_studies), y = n_studies)) +
+  geom_col(fill = "darkgreen", color = "black") + # 'fill' sets bar color, 'color' sets border
+  labs(
+    title = "Number of Entries by Evidence Type", # Changed title to reflect "entries" if not unique studies
+    x = "Evidence Type",
+    y = "Count"
+  ) +
+  coord_flip() + # Flips axes for better readability, especially with long category names
+  theme_minimal() + # A clean, minimalist theme
+  theme(plot.title = element_text(hjust = 0.5)) # Center the plot title
+
+# --- Bar plot of resource types by offset category (side-by-side) ---
+# This plot breaks down 'evidence_type' counts by 'offset_category_general'.
+# It filters out NA values for cleaner plotting.
+ggplot(final_df %>% filter(!is.na(study_evidence_type), !is.na(offset_category_general)),
+       aes(x = fct_infreq(study_evidence_type), fill = offset_category_general)) +
+  geom_bar(position = "dodge", color = "black") + # 'position="dodge"' puts bars side-by-side
+  labs(
+    title = "Entries by Evidence Type and Offset Category", # Adjusted title
+    x = "Evidence Type",
+    y = "Count",
+    fill = "Offset Category" # Legend title for 'fill' aesthetic
+  ) +
+  # Using coord_flip here as well for consistency and readability if needed
+  coord_flip() +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) # Center the plot title
+  # When using coord_flip(), the axis.text.x becomes axis.text.y,
+  # so this line below is typically not needed if you flip coordinates.
+  # theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
 ## Permanence Risks
@@ -158,16 +318,199 @@ top_risks <- final_df %>%
   slice_head(n = 5)
 ```
 
-The most common permanence risk identified was **`r top_risks$permanence_risk_type[[1]]`**, 
-which appeared in `r top_risks$n[[1]]` studies. 
+The most common permanence risk identified was **`r top_risks$permanence_risk_type[[1]]`**, which appeared in `r top_risks$n[[1]]` studies.
 
 This was followed by **`r top_risks$permanence_risk_type[[2]]`** (`r top_risks$n[[2]]` studies), **`r top_risks$permanence_risk_type[[3]]`** (`r top_risks$n[[3]]` studies), **`r top_risks$permanence_risk_type[[4]]`** (`r top_risks$n[[4]]` studies), and **`r top_risks$permanence_risk_type[[5]]`** (`r top_risks$n[[5]]` studies).
 
+Now explore risks by country
 
+```{r}
+#| label: risks-by-country
+#| include: false
+
+risks_by_country <- final_df %>%
+  filter(!is.na(country), !is.na(permanence_risk_type)) %>%
+  distinct(study_title, country, permanence_risk_type) %>%
+  count(country, permanence_risk_type, sort = TRUE)
+```
+
+create a table
+
+```{r}
+#| label: risk-table
+#| echo: false
+
+top_countries <- risks_by_country %>%
+  count(country, wt = n, name = "total_risks") %>%
+  slice_max(total_risks, n = 5) %>%
+  pull(country)
+
+risks_by_country %>%
+  filter(country %in% top_countries) %>%
+  group_by(country) %>%
+  slice_max(n, n = 3) %>%
+  ungroup() %>%
+  arrange(country, desc(n)) %>%
+  knitr::kable(
+    caption = "Top 3 Permanence Risks in the 5 Most Represented Countries",
+    col.names = c("Country", "Permanence Risk Type", "Number of Studies")
+  )
+
+```
+
+group risks by continent
+
+```{r}
+# Group risk *types* by continent
+risk_by_continent <- final_df %>%
+  filter(!is.na(permanence_risk_type), !is.na(continent)) %>%
+  distinct(study_title, continent, permanence_risk_type) %>%
+  count(continent, permanence_risk_type, name = "n_studies") %>%
+  arrange(desc(n_studies))
+
+# Optional: also do this for domain or category instead
+risk_by_domain <- final_df %>%
+  filter(!is.na(permanence_risk_domain), !is.na(continent)) %>%
+  distinct(study_title, continent, permanence_risk_domain) %>%
+  count(continent, permanence_risk_domain, name = "n_studies")
+
+library(ggplot2)
+
+ggplot(risk_by_continent, aes(x = fct_reorder(permanence_risk_type, n_studies), y = n_studies, fill = continent)) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  facet_wrap(~ continent, scales = "free_y") +
+  labs(
+    title = "Permanence Risk Types by Continent",
+    x = "Risk Type", y = "Number of Studies"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+relative_risks <- final_df %>%
+  filter(!is.na(permanence_risk_domain), !is.na(continent)) %>%
+  distinct(study_title, continent, permanence_risk_domain) %>%
+  count(continent, permanence_risk_domain) %>%
+  group_by(continent) %>%
+  mutate(prop = n / sum(n))
+
+```
+
+```{r}
+library(ggplot2)
+
+# 1. Define all expected continents and risk categories
+all_continents <- unique(na.omit(final_df$continent))
+all_risks <- unique(na.omit(final_df$permanence_risk_category))
+
+# 2. Prepare full combinations of continent × risk category
+all_combos <- expand.grid(
+  continent = all_continents,
+  permanence_risk_category = all_risks,
+  stringsAsFactors = FALSE
+)
+
+# 3. Count distinct study-level risk mentions
+heatmap_data <- final_df %>%
+  filter(!is.na(permanence_risk_category), !is.na(continent)) %>%
+  distinct(study_title, continent, permanence_risk_category) %>%
+  count(continent, permanence_risk_category, name = "n_studies")
+
+# 4. Join with all combinations to fill in blanks
+heatmap_complete <- all_combos %>%
+  left_join(heatmap_data, by = c("continent", "permanence_risk_category")) %>%
+  mutate(n_studies = replace_na(n_studies, 0))
+
+# 5. Plot the heatmap with counts and rotated labels
+ggplot(heatmap_complete, aes(x = continent, y = permanence_risk_category, fill = n_studies)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = n_studies), size = 3, color = "black") +
+  scale_fill_viridis_c(option = "plasma", begin = 0.2, end = 0.9) +
+  labs(
+    title = "Heatmap of Permanence Risk Categories by Continent",
+    x = "Continent",
+    y = "Permanence Risk Category",
+    fill = "Number of Studies"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid = element_blank()
+  )
+
+
+```
+
+```{r}
+risk_cooccurrence <- final_df %>%
+  filter(!is.na(permanence_risk_type)) %>%
+  group_by(study_title) %>%
+  summarise(n_unique_risks = n_distinct(permanence_risk_type)) %>%
+  count(n_unique_risks)
+
+```
+
+```{r}
+final_df %>%
+  filter(!is.na(study_publication_year), !is.na(permanence_risk_domain)) %>%
+  distinct(study_title, study_publication_year, permanence_risk_domain) %>%
+  count(study_publication_year, permanence_risk_domain) %>%
+  ggplot(aes(x = study_publication_year, y = n, color = permanence_risk_domain)) +
+  geom_line() +
+  labs(title = "Temporal Trends in Risk Domains", x = "Publication Year", y = "Mentions") +
+  theme_minimal()
+
+```
 
 ## Explore study categories
 
 ```{r}
 summarize_by_study(final_df, permanence_risk_type)
 
+```
+
+## ecosystems
+
+```{r}
+summarize_by_study(final_df, ecosystem_type)
+summarize_by_study(final_df, ecosystem_broad_type)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(rlang) # Make sure rlang is loaded for your function
+
+# Assuming 'broad_ecosystem_type' and 'specific_ecosystem_type' are your column names
+# If they are different, adjust the names below.
+
+# Broad Ecosystem Type Analysis
+broad_ecosystem_summary <- summarize_by_study(final_df, ecosystem_broad_type)
+print(broad_ecosystem_summary)
+
+ggplot(broad_ecosystem_summary, aes(x = reorder(ecosystem_broad_type, n_studies), y = n_studies)) +
+    geom_col(fill = "steelblue") +
+    coord_flip() +
+    labs(title = "Number of Studies per Broad Ecosystem Type",
+         x = "Broad Ecosystem Type",
+         y = "Number of Unique Studies") +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5))
+
+# Specific Ecosystem Type Analysis
+specific_ecosystem_summary <- summarize_by_study(final_df, ecosystem_type)
+print(specific_ecosystem_summary)
+
+# For specific ecosystem types, there might be many categories.
+# Let's visualize the top 20 for readability.
+ggplot(head(specific_ecosystem_summary, 20), aes(x = reorder(ecosystem_type, n_studies), y = n_studies)) +
+    geom_col(fill = "darkgreen") +
+    coord_flip() +
+    labs(title = "Top 20 Specific Ecosystem Types by Number of Studies",
+         x = "Specific Ecosystem Type",
+         y = "Number of Unique Studies") +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5))
 ```
