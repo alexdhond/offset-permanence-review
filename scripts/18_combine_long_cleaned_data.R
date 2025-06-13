@@ -131,8 +131,20 @@ for (name in names(cleaned_data_list)) {
   )
 }
 
+
 # ---------------------------
-# 7. Clean and rename final dataset
+# 7. Merge back in key metadata from raw
+# ---------------------------
+
+metadata_cols <- raw_df %>%
+  select(study_title, publication_year, evidence_type, offset_category_general, permanence_solutions_recommendations_discussed, reviewer_notes)
+
+final_df <- joined_df %>%
+  left_join(metadata_cols, by = "study_title")
+
+
+# ---------------------------
+# 8. Clean and rename final dataset
 # ---------------------------
 
 drop_cols <- c(
@@ -142,7 +154,7 @@ drop_cols <- c(
   "policy_type", "jurisdiction_level", "status.y", "policy_legal_instrument_name"
 )
 
-final_df <- joined_df %>%
+final_df <- final_df %>%
   select(-all_of(drop_cols)) %>%
   rename(
     species_common_name       = standard_common_name,
@@ -168,7 +180,10 @@ final_df <- joined_df %>%
     policy_description        = description,
     permanence_risk_domain    = broad,
     permanence_risk_category  = specific,
-    permanence_risk_type      = sub_risk
+    permanence_risk_type      = sub_risk,
+    study_publication_year    = publication_year,
+    study_evidence_type       = evidence_type
+    
   )
 
 # ---------------------------
