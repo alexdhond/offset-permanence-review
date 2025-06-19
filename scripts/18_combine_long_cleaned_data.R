@@ -31,6 +31,7 @@ cleaned_data_list <- list(
   country     = list(file = "country_clean_valid.csv",                  raw_col = "country"),
   species     = list(file = "focal_species_cleaned_long.csv",           raw_col = "focal_species"),
   ecosystem   = list(file = "ecosystem_cleaned_long.csv",               raw_col = "ecosystem_type_specific"),
+  project     = list(file = "project_type_cleaned_long.csv",            raw_col = "project_type_specific"),
   delivery    = list(file = "offset_delivery_type_cleaned_long.csv",    raw_col = "offset_delivery_type"),
   program     = list(file = "program_type_cleaned_long.csv",            raw_col = "offset_program_name"),
   policy      = list(file = "policy_type_cleaned_long.csv",             raw_col = "policy_legal_instrument_name"),
@@ -106,6 +107,7 @@ coverage_diagnostics <- bind_rows(
   diag_summary(cleaned_data_list$country$df,    "country"),
   diag_summary(cleaned_data_list$species$df,    "species"),
   diag_summary(cleaned_data_list$ecosystem$df,  "ecosystem"),
+  diag_summary(cleaned_data_list$project$df,    "project"),
   diag_summary(cleaned_data_list$delivery$df,   "delivery"),
   diag_summary(cleaned_data_list$program$df,    "program"),
   diag_summary(cleaned_data_list$policy$df,     "policy"),
@@ -131,38 +133,43 @@ for (name in names(cleaned_data_list)) {
   )
 }
 
-
 # ---------------------------
 # 7. Merge back in key metadata from raw
 # ---------------------------
 
 metadata_cols <- raw_df %>%
-  select(study_title, publication_year, evidence_type, offset_category_general, permanence_solutions_recommendations_discussed, reviewer_notes)
+  select(study_title, study_id, row_id, publication_year, evidence_type, offset_category_general, permanence_solutions_recommendations_discussed, reviewer_notes)
 
 final_df <- joined_df %>%
   left_join(metadata_cols, by = "study_title")
-
 
 # ---------------------------
 # 8. Clean and rename final dataset
 # ---------------------------
 
+# Keep a clean study_id before dropping all suffix versions
+final_df <- final_df %>%
+  mutate(study_id = coalesce(study_id.x, study_id.y))  # or prioritize whichever version is better
+
+# Then drop messy ones
 drop_cols <- c(
   "study_id.x", "study_id.y", "study_id.x.x", "study_id.y.y", "study_id.x.x.x", "study_id.y.y.y",
-  "row_id.x", "row_id.y", "row_id.x.x", "row_id.y.y", "row_id.x.x.x", "row_id.y.y.y",
-  "raw_delivery_type", "focal_species", "offset_program_name", "note",
-  "policy_type", "jurisdiction_level", "status.y", "policy_legal_instrument_name"
+  "row_id.x", "row_id.y", "row_id.x.x", "row_id.y.y", "row_id.x.x.x", "row_id.y.y.y", "study_id.y.y.y.y", 
+  "row_id.y.y.y.y", "raw_delivery_type", "focal_species", "offset_program_name", "note",
+  "policy_type", "jurisdiction_level", "status.y", "policy_legal_instrument_name","study_id.x.x.x.x", "row_id.x.x.x.x"  
 )
 
 final_df <- final_df %>%
-  select(-all_of(drop_cols)) %>%
+  select(-any_of(drop_cols)) %>%
   rename(
     species_common_name       = standard_common_name,
     species_scientific_name   = standard_scientific_name,
     species_taxonomic_group   = taxonomic_group,
     ecosystem_type            = ecosystem_type_specific,
     ecosystem_broad_type      = broad_ecosystem,
-    delivery_type             = standardized_delivery_type,
+    project_delivery_type     = standardized_delivery_type,
+    project_type              = project_type_specific,
+    project_broad_type        = intervention_type,
     program_name              = standardized_name.x,
     program_status            = status.x,
     program_mechanism_type    = mechanism_type,
@@ -183,11 +190,46 @@ final_df <- final_df %>%
     permanence_risk_type      = sub_risk,
     study_publication_year    = publication_year,
     study_evidence_type       = evidence_type
-    
   )
 
 # ---------------------------
-# 8. Export final dataset
+# 9. Clean up columns before exporting
+# ---------------------------
+
+final_df <- final_df %>%
+  select(
+    # 1. Metadata
+    study_title, study_id, row_id, study_publication_year, study_evidence_type, offset_category_general, reviewer_notes,
+    
+    # 2. Geography
+    continent, country, subnational_region, subnational_region_type,
+    
+    # 3. Species & Ecosystem
+    species_common_name, species_scientific_name, species_taxonomic_group,
+    ecosystem_type, ecosystem_broad_type,
+    
+    # 4. Project
+    project_type, project_broad_type,
+    
+    # 5. Program
+    program_name, program_type, program_mechanism_type, program_status,
+    program_scope_level, program_scope_location, program_related,
+    
+    # 6. Delivery
+    project_delivery_type,
+    
+    # 7. Policy
+    policy_name, policy_type, policy_note, policy_jurisdiction_level,
+    policy_jurisdiction_note, policy_jurisdiction_location,
+    policy_status, policy_year_adopted, policy_description,
+    
+    # 8. Permanence
+    permanence_risk_domain, permanence_risk_category, permanence_risk_type,
+    permanence_solutions_recommendations_discussed
+  )
+
+# ---------------------------
+# 10. Export final dataset
 # ---------------------------
 
 output_dir <- here("data", "derived")
