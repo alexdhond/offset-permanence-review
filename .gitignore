@@ -6,6 +6,15 @@
 .RData
 .Ruserdata
 .RDataTmp
+.cache/
+_output/
+_publish/
+
+# Quarto/knitr output directories
+*_files/
+*.html
+*.knit.md
+*.utf8.md
 
 # renv internal library
 renv/
