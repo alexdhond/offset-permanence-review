@@ -1,5 +1,8 @@
 # Gitignore File
 
+# all word files
+.docx
+
 # R and RStudio files
 .Rproj.user/
 .Rhistory
