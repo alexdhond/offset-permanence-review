@@ -1,0 +1,196 @@
+---
+title: "extract_figures"
+format: html
+editor: visual
+---
+
+# Export Plots
+```{r}
+# Set up for export
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Optional: Save figure at high resolution (uncomment to use)
+# ggsave("fig-diverging-risk-bar.png", plot = last_plot(), width = 12, height = 10, dpi = 600)
+
+# Create the plot
+ggplot(risk_long, aes(x = risk_type_label, y = n, fill = offset_category)) +
+  geom_col(color = "black") +
+  geom_text(
+    data = risk_labels,
+    aes(x = x_val, y = y_val, label = abs(n), hjust = hjust_val),
+    size = 7,
+    color = "black",
+    inherit.aes = FALSE
+  ) +
+  geom_hline(yintercept = 0, color = "gray40") +
+  geom_segment(
+    data = risk_positions,
+    aes(x = line_y, xend = line_y, y = -Inf, yend = Inf),
+    inherit.aes = FALSE,
+    linetype = "dashed",
+    color = "gray70"
+  ) +
+  geom_segment(
+    data = domain_breaks,
+    aes(x = line_y, xend = line_y, y = -Inf, yend = Inf),
+    inherit.aes = FALSE,
+    linetype = "dashed",
+    color = "black",
+    linewidth = 1
+  ) +
+  scale_fill_brewer(palette = "Pastel1", name = "Offset Category") +
+  scale_y_continuous(labels = function(x) abs(x)) +
+  coord_flip(clip = "off")+  # Allow labels to go outside plot area
+  labs(
+    x = "Risk Type",
+    y = "Number of Studies"
+    # No title here to keep clean for manuscript
+  ) +
+theme_minimal(base_size = 20) +  # base font size
+  theme(
+    plot.title = element_blank(),
+    axis.text.y = element_text(size = 20),                # vertical tick labels (risk types)
+    axis.text.x = element_text(size = 20),                # horizontal axis tick labels (values)
+    axis.title.x = element_text(size = 22, margin = margin(t = 15)),  # x-axis (bottom, flipped)
+    axis.title.y = element_text(size = 22, margin = margin(r = 15)),  # y-axis (left, flipped)
+    legend.title = element_text(size = 20),
+    legend.text = element_text(size = 18),
+    legend.key.size = unit(1.5, "lines"),
+    legend.position = "top",
+    plot.margin = margin(t = 2, r = 8, b = 2, l = 6, unit = "cm")  # generous padding to avoid cutoffs
+  )
+
+```
+
+
+
+
+
+```{r}
+#| label: diverging-bar-risk-domain-category-type
+#| echo: false
+#| fig-width: 12
+#| fig-height: 10
+
+# Define manual domain order
+domain_order <- c("non-physical", "physical", "methodological")
+
+# Apply ordering and arrange data
+risk_clean <- final_df %>%
+  filter(
+    !is.na(permanence_risk_domain),
+    !is.na(permanence_risk_category),
+    !is.na(permanence_risk_type),
+    !is.na(offset_category_general)
+  ) %>%
+  distinct(study_id, permanence_risk_domain, permanence_risk_category, permanence_risk_type,
+           offset_category_general) %>%
+  count(permanence_risk_domain, permanence_risk_category, permanence_risk_type, offset_category_general, name = "n") %>%
+  pivot_wider(names_from = offset_category_general, values_from = n, values_fill = 0) %>%
+  mutate(
+    total = biodiversity + carbon,
+    permanence_risk_domain = factor(permanence_risk_domain, levels = domain_order)
+  ) %>%
+  arrange(permanence_risk_domain, permanence_risk_category, desc(total)) %>%
+  mutate(risk_type_label = factor(permanence_risk_type, levels = rev(unique(permanence_risk_type))))
+
+# Order for plotting
+risk_clean <- risk_clean %>%
+  arrange(permanence_risk_domain, permanence_risk_category, desc(total)) %>%
+  mutate(risk_type_label = paste0(permanence_risk_type)) %>%
+  mutate(risk_type_label = factor(risk_type_label, levels = rev(unique(risk_type_label))))
+
+# Long format for diverging bars
+risk_long <- risk_clean %>%
+  select(permanence_risk_domain, permanence_risk_category, risk_type_label, biodiversity, carbon) %>%
+  pivot_longer(cols = c(biodiversity, carbon), names_to = "offset_category", values_to = "n") %>%
+  mutate(n = if_else(offset_category == "biodiversity", -n, n))
+
+# Line positions: category-level
+risk_positions <- risk_clean %>%
+  mutate(row = as.numeric(factor(risk_type_label, levels = levels(risk_type_label)))) %>%
+  group_by(permanence_risk_domain, permanence_risk_category) %>%
+  summarise(max_row = max(row), .groups = "drop") %>%
+  arrange(permanence_risk_domain, permanence_risk_category) %>%
+  mutate(line_y = max_row + 0.5)
+
+# Line positions: domain-level
+domain_breaks <- risk_clean %>%
+  mutate(row = as.numeric(factor(risk_type_label, levels = levels(risk_type_label)))) %>%
+  group_by(permanence_risk_domain) %>%
+  summarise(max_row = max(row), .groups = "drop") %>%
+  arrange(permanence_risk_domain) %>%
+  mutate(line_y = max_row + 0.5)
+
+# Create label dataframe with proper coordinates
+risk_labels <- risk_long %>%
+  filter(n != 0) %>%
+  mutate(
+    hjust_val = if_else(n < 0, 1.5, -0.5),  # further offset from bars
+    y_val = n,
+    x_val = risk_type_label
+  )
+
+# Plot
+ggplot(risk_long, aes(x = risk_type_label, y = n, fill = offset_category)) +
+  geom_col(color = "black") +
+  geom_text(
+    data = risk_labels,
+    aes(x = x_val, y = y_val, label = abs(n), hjust = hjust_val),
+    size = 7,
+    color = "black",
+    inherit.aes = FALSE
+  ) +
+  geom_hline(yintercept = 0, color = "gray40") +
+  geom_segment(
+    data = risk_positions,
+    aes(x = line_y, xend = line_y, y = -Inf, yend = Inf),
+    inherit.aes = FALSE,
+    linetype = "dashed",
+    color = "gray70"
+  ) +
+  geom_segment(
+    data = domain_breaks,
+    aes(x = line_y, xend = line_y, y = -Inf, yend = Inf),
+    inherit.aes = FALSE,
+    linetype = "dashed",
+    color = "black",
+    linewidth = 1
+  ) +
+  scale_fill_brewer(palette = "Pastel1", name = "Offset Category") +
+  scale_y_continuous(
+    labels = function(x) abs(x), expand = expansion(mult = c(0.1, 0.15)))+  # adds space on both ends
+  coord_flip(clip = "off")+
+  labs(
+    title = "Risk Type by Offset Category",
+    x = "Risk Type",
+    y = "Number of Studies"
+  ) +
+theme_minimal(base_size = 20) +  # base font size
+  theme(
+    plot.title = element_blank(),
+    axis.text.y = element_text(size = 22),                # vertical tick labels (risk types)
+    axis.text.x = element_text(size = 22),                # horizontal axis tick labels (values)
+    axis.title.x = element_text(size = 24, margin = margin(t = 15)),  # x-axis (bottom, flipped)
+    axis.title.y = element_text(size = 24, margin = margin(r = 20)),  # y-axis (left, flipped)
+    legend.title = element_text(size = 24),
+    legend.text = element_text(size = 22),
+    legend.key.size = unit(1.5, "lines"),
+    legend.position = "top",
+    plot.margin = margin(t = 2, r = 5, b = 2, l = 5, unit = "cm")  # generous padding to avoid cutoffs
+  )
+
+```
+
+```{r}
+ggsave(
+  filename = "fig-diverging-risk-bar.png",
+  plot = last_plot(),
+  width = 20,
+  height = 24,
+  dpi = 600,
+  units = "in"
+)
+```
