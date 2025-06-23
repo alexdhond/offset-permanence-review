@@ -6,6 +6,7 @@
 .RData
 .Ruserdata
 .RDataTmp
+.RDataTmp1
 .cache/
 _output/
 _publish/
