@@ -1,6 +1,12 @@
 ---
 title: "Permanence Risks Analysis"
 author: "Alex Dhond"
+project:
+  type: default
+  output-dir: output
+format:
+  html:
+    self-contained: true
 ---
 
 # Offset Permanence Review Data Exploration
