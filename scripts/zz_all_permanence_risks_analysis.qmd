@@ -2304,3 +2304,71 @@ ggplot(us_risks_binned, aes(x = period, y = n_studies, fill = permanence_risk_ty
   )
 
 ```
+
+
+
+# program names and risks
+```{r}
+library(dplyr)
+library(tidyr)
+library(gt)
+
+# 1. Filter and clean data
+risk_per_program <- final_df %>%
+  filter(!is.na(program_name), !is.na(permanence_risk_type)) %>%
+  distinct(study_id, program_name, permanence_risk_type)
+
+# 2. Count number of studies citing each risk in each program
+risk_counts <- risk_per_program %>%
+  count(program_name, permanence_risk_type, name = "n_studies")
+
+# 3. Total number of studies per program (to sort programs)
+program_totals <- risk_per_program %>%
+  distinct(study_id, program_name) %>%
+  count(program_name, name = "program_total")
+
+# 4. For each program, get top 3 risks with counts in label
+top_3_risks <- risk_counts %>%
+  group_by(program_name) %>%
+  slice_max(order_by = n_studies, n = 3, with_ties = FALSE) %>%
+  mutate(
+    risk_label = paste0(permanence_risk_type, " (", n_studies, ")"),
+    rank = paste0("Risk_", row_number())
+  ) %>%
+  ungroup()
+
+# 5. Reshape to wide format for display
+top_3_table <- top_3_risks %>%
+  select(program_name, rank, risk_label) %>%
+  pivot_wider(names_from = rank, values_from = risk_label)
+
+# 6. Join study count and sort
+top_3_table <- top_3_table %>%
+  left_join(program_totals, by = "program_name") %>%
+  arrange(desc(program_total)) %>%
+  select(program_name, program_total, Risk_1, Risk_2, Risk_3)
+
+# 7. Display with gt
+top_3_table %>%
+  gt() %>%
+  tab_header(
+    title = "Top 3 Permanence Risks by Offset Program"
+  ) %>%
+  cols_label(
+    program_name = "Offset Program",
+    program_total = "Studies",
+    Risk_1 = "Top Risk",
+    Risk_2 = "2nd Risk",
+    Risk_3 = "3rd Risk"
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels(everything())
+  ) %>%
+  fmt_number(columns = program_total, decimals = 0)
+
+```
+
+
+
+
