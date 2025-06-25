@@ -4,72 +4,12 @@ format: html
 editor: visual
 ---
 
-# Export Plots
-```{r}
-# Set up for export
-library(ggplot2)
-library(dplyr)
-library(tidyr)
+Run this after running the main "permanence risks analysis" file. This is for exporting certain plots for use in the manuscript. 
 
-# Optional: Save figure at high resolution (uncomment to use)
-# ggsave("fig-diverging-risk-bar.png", plot = last_plot(), width = 12, height = 10, dpi = 600)
-
-# Create the plot
-ggplot(risk_long, aes(x = risk_type_label, y = n, fill = offset_category)) +
-  geom_col(color = "black") +
-  geom_text(
-    data = risk_labels,
-    aes(x = x_val, y = y_val, label = abs(n), hjust = hjust_val),
-    size = 7,
-    color = "black",
-    inherit.aes = FALSE
-  ) +
-  geom_hline(yintercept = 0, color = "gray40") +
-  geom_segment(
-    data = risk_positions,
-    aes(x = line_y, xend = line_y, y = -Inf, yend = Inf),
-    inherit.aes = FALSE,
-    linetype = "dashed",
-    color = "gray70"
-  ) +
-  geom_segment(
-    data = domain_breaks,
-    aes(x = line_y, xend = line_y, y = -Inf, yend = Inf),
-    inherit.aes = FALSE,
-    linetype = "dashed",
-    color = "black",
-    linewidth = 1
-  ) +
-  scale_fill_brewer(palette = "Pastel1", name = "Offset Category") +
-  scale_y_continuous(labels = function(x) abs(x)) +
-  coord_flip(clip = "off")+  # Allow labels to go outside plot area
-  labs(
-    x = "Risk Type",
-    y = "Number of Studies"
-    # No title here to keep clean for manuscript
-  ) +
-theme_minimal(base_size = 20) +  # base font size
-  theme(
-    plot.title = element_blank(),
-    axis.text.y = element_text(size = 20),                # vertical tick labels (risk types)
-    axis.text.x = element_text(size = 20),                # horizontal axis tick labels (values)
-    axis.title.x = element_text(size = 22, margin = margin(t = 15)),  # x-axis (bottom, flipped)
-    axis.title.y = element_text(size = 22, margin = margin(r = 15)),  # y-axis (left, flipped)
-    legend.title = element_text(size = 20),
-    legend.text = element_text(size = 18),
-    legend.key.size = unit(1.5, "lines"),
-    legend.position = "top",
-    plot.margin = margin(t = 2, r = 8, b = 2, l = 6, unit = "cm")  # generous padding to avoid cutoffs
-  )
-
-```
-
-
-
-
+# Plot 1: Diverging Bar Plot (offset type x risk type)
 
 ```{r}
-#| label: diverging-bar-risk-domain-category-type
+#| label: plot-1-diverging-bar-risk-domain-category-type
 #| echo: false
 #| fig-width: 12
 #| fig-height: 10
@@ -183,7 +123,7 @@ theme_minimal(base_size = 20) +  # base font size
   )
 
 ```
-
+## Save Plot 1
 ```{r}
 ggsave(
   filename = "fig-diverging-risk-bar.png",
@@ -194,3 +134,420 @@ ggsave(
   units = "in"
 )
 ```
+
+# Plot 2: Heatmap of Geographic Continent Trends
+
+```{r}
+#| label: risk-heatmap-by-continent-normalized
+#| echo: false
+
+# Step 1: Get all combinations of continent and risk category
+all_combos <- expand.grid(
+  continent = unique(na.omit(final_df$continent)),
+  permanence_risk_category = unique(na.omit(final_df$permanence_risk_category)),
+  stringsAsFactors = FALSE
+)
+
+# Step 2: Count studies by continent × risk category
+heatmap_data <- final_df %>%
+  filter(!is.na(permanence_risk_category), !is.na(continent)) %>%
+  distinct(study_id, continent, permanence_risk_category) %>%
+  count(continent, permanence_risk_category, name = "n_studies")
+
+# Step 3: Get total studies per continent
+total_per_continent <- final_df %>%
+  filter(!is.na(study_id), !is.na(continent)) %>%
+  distinct(study_id, continent, permanence_risk_category) %>%
+  count(continent, name = "total_studies")
+
+# Step 4: Join and normalize
+heatmap_normalized <- all_combos %>%
+  left_join(heatmap_data, by = c("continent", "permanence_risk_category")) %>%
+  left_join(total_per_continent, by = "continent") %>%
+  mutate(
+    n_studies = replace_na(n_studies, 0),
+    total_studies = replace_na(total_studies, 1),  # Avoid divide-by-zero
+    prop = n_studies / total_studies,
+    text_color = ifelse(prop <= 0.05, "white", "black"),
+    permanence_risk_category = fct_reorder(permanence_risk_category, prop, .fun = sum)
+  )
+
+# Optional: Refactor continent order
+heatmap_normalized <- heatmap_normalized %>%
+  mutate(
+    continent = factor(continent, levels = c(
+      "North America", "South America", "Europe", "Asia", "Oceania", "Africa"
+    ))
+  )
+
+# plot
+
+ggplot(heatmap_normalized, aes(x = continent, y = permanence_risk_category, fill = prop)) +
+  geom_tile(color = "white") +
+  geom_text(
+    aes(label = scales::percent(prop, accuracy = 1), color = text_color),
+    size = 7
+  ) +
+  scale_fill_viridis_c(
+  trans = "sqrt",  # or "log" for sharper transformation
+  option = "viridis",
+  limits = c(0, 0.5),
+  labels = scales::percent_format(accuracy = 1),
+  guide = guide_colorbar(
+    barheight = unit(6, "cm"),    # Make legend taller
+    barwidth = unit(0.5, "cm"),   # Width of color bar
+    title.position = "top",       # Puts title above color bar
+    title.hjust = 0.5,             # Center the title
+    title.vjust = 4
+    )
+) +
+  scale_color_identity() +
+  labs(
+    title = NULL,   # Remove title
+    x = NULL,       # Remove x-axis label
+    y = NULL,       # Remove y-axis label
+    fill = "Proportion"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    axis.text.x = element_text(size = 20, angle = 45, hjust = 1),
+    axis.text.y = element_text(size = 20),
+    axis.title = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_blank(),
+    legend.title = element_text(size = 20),
+    legend.text = element_text(size = 20)
+  )
+
+
+```
+
+## Save Plot 2
+```{r}
+ggsave(
+  filename = "../output/fig-heatmap-continent.png",  # Save to output folder
+  plot = last_plot(),                                 # Or specify your plot object
+  width = 14,                                          # Width in inches (adjust as needed)
+  height = 14,                                         # Height in inches (adjust as needed)
+  dpi = 600,                                          # High-resolution
+  units = "in"                                        # Use inches for journals
+)
+
+```
+
+
+
+
+
+
+
+# Plot 3: Temporal Permanence Trends by Top 2 Programs
+```{r}
+
+# === STEP 1: Get all unique risk categories from both datasets ===
+all_risks <- union(
+  unique(risk_cat_binned_uswetlands$permanence_risk_category),
+  unique(risk_cat_binned_redd$permanence_risk_category)
+)
+
+# === STEP 2: Apply consistent factor levels and label program group ===
+risk_cat_binned_uswetlands <- risk_cat_binned_uswetlands %>%
+  filter(!is.na(permanence_risk_category), !is.na(period)) %>%
+  mutate(
+    program_group = "US Wetland Programs",
+    permanence_risk_category = factor(permanence_risk_category, levels = all_risks)
+  )
+
+risk_cat_binned_redd <- risk_cat_binned_redd %>%
+  filter(!is.na(permanence_risk_category), !is.na(period)) %>%
+  mutate(
+    program_group = "REDD+",
+    permanence_risk_category = factor(permanence_risk_category, levels = all_risks)
+  )
+
+# === STEP 3: Combine both datasets ===
+risk_cat_binned_combined <- bind_rows(
+  risk_cat_binned_uswetlands,
+  risk_cat_binned_redd
+)
+
+risk_cat_binned_combined <- risk_cat_binned_combined %>%
+  group_by(program_group, period) %>%
+  mutate(total_studies = sum(n_studies)) %>%
+  ungroup() %>%
+  mutate(
+    percentage = (n_studies / total_studies) * 100,
+    label = ifelse(n_studies > 0, as.character(n_studies), "")  # only show counts > 0
+  )
+
+# === STEP 4: Get domain info for each category ===
+all_categories <- final_df %>%
+  filter(permanence_risk_category %in% all_risks) %>%
+  distinct(permanence_risk_category, permanence_risk_domain)
+
+# === STEP 5: Assign unique colors to each category across domains ===
+
+# Define fixed base colors for domains
+domain_base_colors <- c(
+  "non-physical" = "#4E79A7",     # blue
+  "physical" = "#59A14F",         # green
+  "methodological" = "#E15759"    # red
+)
+
+# Generate distinct shades within each domain
+get_domain_palette <- function(base_color, n) {
+  colorRampPalette(c("#FFFFFF", base_color))(n + 1)[-1]
+}
+
+# Build the full color mapping per category (corrected!)
+category_colors <- all_categories %>%
+  group_by(permanence_risk_domain) %>%
+  arrange(permanence_risk_category) %>%
+  mutate(color = get_domain_palette(
+    base_color = domain_base_colors[permanence_risk_domain[1]],  # ✅ FIXED HERE
+    n = n()
+  )) %>%
+  ungroup() %>%
+  select(permanence_risk_category, color) %>%
+  deframe()
+
+# Add fallback gray color for any unmatched categories
+missing_risks <- setdiff(all_risks, names(category_colors))
+category_colors[missing_risks] <- "gray70"
+
+# === STEP 6.5: Reorder risk category factor levels for grouped legend ===
+
+# Create a tibble of categories and their assigned color (from earlier)
+category_order_df <- tibble::tibble(
+  category = names(category_colors),
+  color = unname(category_colors)
+) %>%
+  left_join(all_categories, by = c("category" = "permanence_risk_category"))
+
+library(colorspace)
+
+# Extract color vector
+hex_colors <- unname(category_colors)
+
+# Convert all hex colors to RGB and calculate luminance
+rgb_matrix <- hex2RGB(hex_colors)@coords
+luminance_vals <- 0.299 * rgb_matrix[,1] + 0.587 * rgb_matrix[,2] + 0.114 * rgb_matrix[,3]
+
+# Build dataframe with luminance
+category_order_df <- tibble::tibble(
+  category = names(category_colors),
+  color = hex_colors,
+  luminance = luminance_vals
+) %>%
+  left_join(all_categories, by = c("category" = "permanence_risk_category")) %>%
+  mutate(permanence_risk_domain = factor(permanence_risk_domain,
+                                         levels = c("physical", "non-physical", "methodological"))) %>%
+  arrange(permanence_risk_domain, desc(luminance))
+
+# Set this as the new ordered factor
+ordered_levels <- category_order_df$category
+
+# Apply to combined dataset
+risk_cat_binned_combined <- risk_cat_binned_combined %>%
+  mutate(permanence_risk_category = factor(permanence_risk_category, levels = ordered_levels))
+
+# Also reorder category_colors
+category_colors <- category_colors[ordered_levels]
+
+# rename factor levels
+risk_cat_binned_combined <- risk_cat_binned_combined %>%
+  mutate(program_group = recode(program_group,
+    "REDD+" = "REDD+",
+    "US Wetland Programs" = "U.S. CWA Permitting and Mitigation Banking"
+  ))
+
+# Calculate total studies per period
+totals_df <- risk_cat_binned_combined %>%
+  group_by(program_group, period) %>%
+  summarise(total = sum(n_studies), .groups = "drop")
+
+# === STEP 6: Final Plot ===
+ggplot(risk_cat_binned_combined, aes(x = period, y = percentage, fill = permanence_risk_category)) +
+  geom_col(color = "black") +
+  geom_text(data = totals_df, aes(x = period, y = 105, label = total),
+          inherit.aes = FALSE, size = 7)+
+  facet_wrap(~ program_group, ncol = 1) +
+  scale_fill_manual(values = category_colors, name = "Risk Category") +
+  labs(
+    x = "Publication Period",
+    y = "Percentage of Studies"
+  ) +
+  theme_minimal(base_size = 20) +
+  theme(
+    panel.spacing = unit(2, "lines"),  # or "cm", "pt", etc.
+    plot.title = element_text(hjust = 0.5),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "top",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 14),
+    strip.text = element_text(size = 14),
+    legend.box = "vertical",
+    plot.margin = margin(t = 40, r = 10, b = 10, l = 10)
+  ) +
+  guides(fill = guide_legend(ncol = 2, byrow = TRUE))
+
+```
+## Save Plot 3
+```{r}
+ggsave(
+  filename = "../output/fig-temporal-risks-program.png",  # Save to output folder
+  plot = last_plot(),                                 # Or specify your plot object
+  width = 12,                                          # Width in inches (adjust as needed)
+  height = 14,                                         # Height in inches (adjust as needed)
+  dpi = 600,                                          # High-resolution
+  units = "in"                                        # Use inches for journals
+)
+
+```
+
+
+
+
+
+### testing
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(tibble)
+library(colorspace)
+
+# STEP 0: Filter and bin relevant data
+final_df_binned <- final_df %>%
+  filter(
+    !is.na(study_id),
+    !is.na(permanence_risk_category),
+    !is.na(permanence_risk_domain),
+    !is.na(study_publication_year),
+    program_name %in% c("REDD+", "US CWA 404 Permitting", "US Mitigation Banking")
+  ) %>%
+  mutate(
+    period = cut(
+      study_publication_year,
+      breaks = c(1990, 1995, 2000, 2005, 2010, 2015, 2020, 2026),
+      labels = c("1990–1994", "1995–1999", "2000–2004", "2005–2009", "2010–2014", "2015–2019", "2020–2025"),
+      right = FALSE
+    ),
+    program_group = case_when(
+      program_name %in% c("US CWA 404 Permitting", "US Mitigation Banking") ~ "U.S. CWA Permitting and Mitigation Banking",
+      TRUE ~ program_name
+    )
+  )
+
+# STEP 1: Calculate fractional weights per study
+study_risk_weights <- final_df_binned %>%
+  distinct(study_id, program_group, period, permanence_risk_category) %>%
+  group_by(study_id, program_group, period) %>%
+  mutate(weight = 1 / n()) %>%
+  ungroup()
+
+# STEP 2: Sum weights to get risk proportions
+risk_shares <- study_risk_weights %>%
+  group_by(program_group, period, permanence_risk_category) %>%
+  summarise(weighted_sum = sum(weight), .groups = "drop")
+
+# STEP 3: Total studies per period/program
+total_study_counts <- final_df_binned %>%
+  distinct(study_id, program_group, period) %>%
+  count(program_group, period, name = "total_studies")
+
+# STEP 4: Combine and calculate %
+plot_df <- risk_shares %>%
+  left_join(total_study_counts, by = c("program_group", "period")) %>%
+  mutate(
+    percentage = (weighted_sum / total_studies) * 100,
+    label = ifelse(weighted_sum > 0, round(weighted_sum, 1), "")
+  )
+
+# STEP 5: Build color palette
+all_categories <- final_df %>%
+  filter(permanence_risk_category %in% unique(plot_df$permanence_risk_category)) %>%
+  distinct(permanence_risk_category, permanence_risk_domain)
+
+domain_base_colors <- c(
+  "physical" = "#59A14F",         # green
+  "non-physical" = "#4E79A7",     # blue
+  "methodological" = "#E15759"    # red
+)
+
+get_domain_palette <- function(base_color, n) {
+  colorRampPalette(c("#FFFFFF", base_color))(n + 1)[-1]
+}
+
+# Assign initial colors
+category_colors_df <- all_categories %>%
+  group_by(permanence_risk_domain) %>%
+  arrange(permanence_risk_category) %>%
+  mutate(color = get_domain_palette(domain_base_colors[permanence_risk_domain[1]], n())) %>%
+  ungroup()
+
+# STEP 6: Reorder by luminance (dark to light per domain)
+rgb_matrix <- hex2RGB(category_colors_df$color)@coords
+luminance_vals <- 0.299 * rgb_matrix[, 1] + 0.587 * rgb_matrix[, 2] + 0.114 * rgb_matrix[, 3]
+
+category_order_df <- category_colors_df %>%
+  mutate(luminance = luminance_vals) %>%
+  mutate(permanence_risk_domain = factor(permanence_risk_domain, levels = c("physical", "non-physical", "methodological"))) %>%
+  arrange(permanence_risk_domain, desc(luminance))
+
+# Final ordered levels and named color vector
+ordered_levels <- category_order_df$permanence_risk_category
+category_colors <- setNames(category_order_df$color, category_order_df$permanence_risk_category)
+
+# Apply to plot_df
+plot_df <- plot_df %>%
+  mutate(permanence_risk_category = factor(permanence_risk_category, levels = ordered_levels))
+
+# STEP 7: Final Plot
+ggplot(plot_df, aes(x = period, y = percentage, fill = permanence_risk_category)) +
+  geom_col(color = "black") +
+  geom_text(
+    data = total_study_counts,
+    aes(x = period, y = 105, label = total_studies),
+    inherit.aes = FALSE, size = 5
+  ) +
+  facet_wrap(~ program_group, ncol = 1) +
+  scale_fill_manual(values = category_colors) +
+  scale_y_continuous(limits = c(0, 110), expand = expansion(mult = c(0, 0.05))) +
+  labs(
+    x = "Publication Period",
+    y = "Percentage of Studies",
+    fill = "Risk Category"
+  ) +
+  theme_minimal(base_size = 16) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "top",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 12),
+    strip.text = element_text(size = 14),
+    panel.spacing = unit(2, "lines"),
+    plot.margin = margin(30, 10, 10, 10)
+  ) +
+  guides(fill = guide_legend(ncol = 2, byrow = TRUE))
+
+```
+
+
+## Save Plot 3
+```{r}
+ggsave(
+  filename = "../output/TEST-temporal-risks-program.png",  # Save to output folder
+  plot = last_plot(),                                 # Or specify your plot object
+  width = 12,                                          # Width in inches (adjust as needed)
+  height = 14,                                         # Height in inches (adjust as needed)
+  dpi = 600,                                          # High-resolution
+  units = "in"                                        # Use inches for journals
+)
+
+```
+
+
+
