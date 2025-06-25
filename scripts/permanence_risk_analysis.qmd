@@ -41,6 +41,8 @@ library(RColorBrewer) # table colors
 library(viridis) # colors
 library(scales) # colors
 library(glue) # output
+library(colorspace) # figures
+library(cowplot) # plots
 
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 ```
