@@ -36,13 +36,11 @@ library(RColorBrewer) # Plot colors
 library(knitr) # Knitting document
 library(gt) # Tables
 library(purrr) # Dataframe manipulation
-library(ggtext) # tables
 library(RColorBrewer) # table colors
 library(viridis) # colors
 library(scales) # colors
 library(glue) # output
 library(colorspace) # figures
-library(cowplot) # plots
 
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 ```
@@ -2425,4 +2423,125 @@ Above I explored various facets of the dataset. If I had to summarize some of th
 - Despite the number of reforms to the U.S. wetland mitigation system (in 2003 and 2008), there does not appear to be a decrease in the number of risks identified. 
 
 (will build this out further with time)
+
+
+
+
+
+
+
+
+
+
+# contintent map
+
+```{r continent-pie-ordered, fig.width=10, fig.height=6, message=FALSE, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+library(colorspace)
+
+# STEP 0: Filter and prepare data --------------------------------------------
+continent_df <- final_df %>%
+  filter(
+    !is.na(study_id),
+    !is.na(permanence_risk_category),
+    !is.na(permanence_risk_domain),
+    !is.na(continent)
+  ) %>%
+  # Get unique study-category-continent combos
+  distinct(study_id, continent, permanence_risk_category, permanence_risk_domain)
+
+# STEP 1: Assign fractional weight per study/continent -----------------------
+weighted_df <- continent_df %>%
+  group_by(study_id, continent) %>%
+  mutate(weight = 1 / n()) %>%
+  ungroup()
+
+# STEP 2: Aggregate to get study-weighted counts -----------------------------
+continent_risk <- weighted_df %>%
+  group_by(continent, permanence_risk_category, permanence_risk_domain) %>%
+  summarise(weighted_sum = sum(weight), .groups = "drop")
+
+# STEP 3: Compute percentages per continent ---------------------------------
+continent_totals <- continent_risk %>%
+  group_by(continent) %>%
+  summarise(total_studies = sum(weighted_sum), .groups = "drop")
+
+plot_df <- continent_risk %>%
+  left_join(continent_totals, by = "continent") %>%
+  mutate(
+    percentage = (weighted_sum / total_studies) * 100,
+    label = ifelse(percentage >= 5, paste0(round(percentage, 1), "%"), "") # only label slices ≥5%
+  )
+
+# STEP 4: Create ordered palette --------------------------------------------
+domain_base_colors <- c(
+  "physical" = "#59A14F",        # green
+  "non-physical" = "#4E79A7",    # blue
+  "methodological" = "#E15759"   # red
+)
+
+get_domain_palette <- function(base_color, n) {
+  colorRampPalette(c("#FFFFFF", base_color))(n + 1)[-1]
+}
+
+# Compute base category colors
+category_colors_df <- plot_df %>%
+  distinct(permanence_risk_category, permanence_risk_domain) %>%
+  group_by(permanence_risk_domain) %>%
+  arrange(permanence_risk_category) %>%
+  mutate(color = get_domain_palette(domain_base_colors[permanence_risk_domain[1]], n())) %>%
+  ungroup()
+
+# Compute luminance for dark -> light sorting
+rgb_matrix <- hex2RGB(category_colors_df$color)@coords
+luminance_vals <- 0.299 * rgb_matrix[, 1] + 0.587 * rgb_matrix[, 2] + 0.114 * rgb_matrix[, 3]
+
+category_colors_df <- category_colors_df %>%
+  mutate(luminance = luminance_vals) %>%
+  mutate(permanence_risk_domain = factor(permanence_risk_domain, levels = c("physical","non-physical","methodological"))) %>%
+  arrange(permanence_risk_domain, luminance)  # dark -> light
+
+# Reorder factor levels and create color vector
+ordered_levels <- category_colors_df$permanence_risk_category
+category_colors <- setNames(category_colors_df$color, category_colors_df$permanence_risk_category)
+
+plot_df <- plot_df %>%
+  mutate(permanence_risk_category = factor(permanence_risk_category, levels = ordered_levels))
+
+# STEP 5: Add facet labels with total studies --------------------------------
+facet_labels <- continent_totals %>%
+  mutate(facet_label = paste0(continent, " (", round(total_studies), " studies)")) %>%
+  select(continent, facet_label)
+
+plot_df <- plot_df %>%
+  left_join(facet_labels, by = "continent")
+
+# STEP 6: Plot faceted, ordered pies ----------------------------------------
+ggplot(plot_df, aes(x = "", y = percentage, fill = permanence_risk_category)) +
+  geom_col(color = "black") +
+  geom_text(aes(label = label), position = position_stack(vjust = 0.5), size = 4) +
+  coord_polar(theta = "y") +
+  facet_wrap(~ facet_label) +
+  scale_fill_manual(values = category_colors) +
+  labs(
+    x = NULL, y = NULL,
+    fill = "Risk Category",
+    title = "Distribution of Permanence Risk Categories by Continent"
+  ) +
+  theme_void(base_size = 16) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 12),
+    strip.text = element_text(size = 14, face = "bold"),
+    panel.spacing = unit(2, "lines"),
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5)
+  )
+```
+
+# Run all
+```{r}
+
+```
 

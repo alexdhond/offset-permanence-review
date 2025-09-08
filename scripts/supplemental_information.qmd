@@ -1,0 +1,612 @@
+---
+title: "Supplemental Information for Review of Permanence Risks to Biodiversity and Nature-based Carbon Offsets"
+author: "Alex Dhond"
+project:
+  type: default
+  output-dir: output
+format:
+  html:
+    self-contained: true
+---
+
+# Supplementary Figures for Offset Permanence Review
+
+## 1. Setup
+
+### 1.1. Load Required Packages
+
+```{r}
+#| label: load-packages
+#| include: false
+
+# Load all packages 
+library(tidyverse) # Data manipulation
+library(here) # Easy file paths
+library(janitor) # Clean column names
+library(readxl) # Reading Excel files
+library(countrycode) # Geospatial countries
+library(sf) # Geospatial data
+library(rnaturalearth) # Geospatial data
+library(rnaturalearthdata) # Geospatial data
+library(RColorBrewer) # Plot colors
+library(knitr) # Knitting document
+library(gt) # Tables
+library(purrr) # Dataframe manipulation
+library(viridis) # colors
+```
+
+### 1.2. Load Helper Functions
+
+```{r}
+#| label: load-helper-functions
+#| include: false
+
+# Count unique studies mentioning each variable value
+summarize_by_study <- function(data, var, label = NULL) {
+  var <- rlang::enquo(var)
+  label <- label %||% rlang::as_name(var)
+
+  data %>%
+    filter(!is.na(!!var), !!var != "") %>%
+    group_by(!!var) %>%
+    summarise(n_studies = n_distinct(study_id), .groups = "drop") %>%
+    arrange(desc(n_studies)) %>%
+    rename(!!label := !!var)
+}
+
+# Format a gt summary table from summarize_by_study() output
+
+make_summary_table <- function(df, var_name, table_title) {
+  df %>%
+    gt() %>%
+    tab_header(title = md(paste0("**", table_title, "**"))) %>%
+    cols_label(
+      !!var_name := "Category",
+      n_studies = "Number of Studies"
+    ) %>%
+    fmt_number(columns = "n_studies", decimals = 0) %>%
+    tab_style(
+      style = cell_text(weight = "bold"),
+      locations = cells_column_labels(everything())
+    ) %>%
+    tab_options(
+      table.width = "90%",
+      table.border.top.style = "solid",
+      table.border.top.width = px(1),
+      table.border.top.color = "black",
+      table.border.bottom.style = "solid",
+      table.border.bottom.width = px(1),
+      table.border.bottom.color = "black",
+      table.border.left.style = "solid",
+      table.border.left.width = px(1),
+      table.border.left.color = "black",
+      table.border.right.style = "solid",
+      table.border.right.width = px(1),
+      table.border.right.color = "black"
+    )
+}
+
+# Safe combo generator
+get_combos <- function(risk_list, combo_size = 2) {
+  if (length(risk_list) >= combo_size) {
+    combn(risk_list, combo_size, simplify = FALSE)
+  } else {
+    list()
+  }
+}
+
+# Count studies with non-missing values
+studies_reporting <- function(var) {
+  final_df %>%
+    filter(!is.na({{ var }})) %>%
+    distinct(study_id) %>% 
+    nrow()
+}
+
+# Helper function for repeated ggplot bar plots
+make_bar_plot <- function(data, x_var, y_var, fill_var, x_lab, y_lab, fill_lab, flip = TRUE) {
+  p <- ggplot(data,
+              aes(x = !!x_var, y = !!y_var, fill = !!fill_var)) +
+    geom_col(position = position_dodge(width = 0.9), color = "black") +
+    geom_text(aes(label = !!y_var),
+              position = position_dodge(width = 0.9),
+              hjust = -0.4, size = 4, color = "black") +
+    scale_fill_brewer(palette = "Pastel1") +
+    labs(
+      x = x_lab,
+      y = y_lab,
+      fill = fill_lab
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5),
+      legend.position = "top",
+      plot.margin = margin(1, 1.5, 1, 1, unit = "lines")
+    )
+  if (flip) {
+    p <- p + coord_flip()
+  }
+  p
+}
+```
+
+### 1.3. Load Data
+
+```{r}
+#| label: load-data
+#| include: false
+
+# Load the cleaned, long, final dataset
+final_df <- read_csv(
+  here("data", "derived", "offset_perm_rev_long_cleaned.csv"),
+  guess_max = 10000,
+  col_types = cols(
+    species_common_name     = col_character(),
+    species_scientific_name = col_character(),
+    species_taxonomic_group = col_character(),
+    .default = col_guess()
+  )
+)
+
+# Ensure every study_title has a unique study_id
+final_df <- final_df %>%
+  mutate(study_id = paste0("id_", as.integer(factor(study_title))))
+
+# Load risk typology
+risk_typology <- read_csv(here("data", "reference", "permanence_risk_typology_lookup.csv")) %>%
+  janitor::clean_names() %>%
+  select(domain = broad, category = specific, type = sub_risk)
+
+# Count total unique studies in dataset
+total_unique_studies <- final_df %>%
+  distinct(study_id) %>%
+  nrow()
+```
+
+------------------------------------------------------------------------
+
+# 2. Figure Generation
+
+## 2.1. Temporal Overview
+Figure: Distribution of study publication years in dataset
+```{r}
+#| label: temporal-overview
+#| echo: false
+#| fig-width: 6.5
+#| fig-height: 4.5
+#| dpi: 300
+
+# Prepare data
+year_summary <- final_df %>%
+    filter(!is.na(study_publication_year)) %>%
+    distinct(study_id, study_publication_year) %>%
+    count(study_publication_year, name = "n_studies") %>%
+    arrange(study_publication_year)
+
+# Plot bar chart
+
+make_bar_plot(
+    year_summary,
+    rlang::expr(study_publication_year),
+    rlang::expr(n_studies),
+    rlang::expr(study_publication_year),
+    x_lab = "Publication Year",
+    y_lab = "Number of Studies",
+    fill_lab = "Year",
+    flip = FALSE
+)
+
+# Save plot
+ggsave(here("output", "supplementary_figures", "temporal_overview.png"), plot = last_plot(), width = 7, height = 4, dpi = 300, units = "in")
+```
+
+## 2.2. Evidence Type by Offset Category
+
+```{r}
+#| label: evidence-type-offset-category-plot
+#| echo: false
+
+# Prepare data for plot
+evidence_offset_plot <- final_df %>%
+  filter(
+    !is.na(study_evidence_type), study_evidence_type != "",
+    !is.na(offset_category_general), offset_category_general != ""
+  ) %>%
+  group_by(study_evidence_type, offset_category_general) %>%
+  summarise(n_studies = n_distinct(study_id), .groups = "drop")
+
+# Plot
+ggplot(evidence_offset_plot,
+       aes(x = fct_reorder(study_evidence_type, n_studies, .fun = sum),
+           y = n_studies, fill = offset_category_general)) +
+  geom_col(position = "dodge", color = "black") +
+  geom_text(aes(label = n_studies),
+            position = position_dodge(width = 0.9),
+            hjust = -0.4, size = 4, color = "black") +
+  scale_fill_brewer(palette = "Pastel1") +
+  labs(
+    x = "Evidence Type",
+    y = "Number of Studies",
+    fill = "Offset Category"
+  ) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top",
+    plot.margin = margin(1, 1.5, 1, 1, unit = "lines")
+  )
+
+# Save plot
+ggsave(here("output", "supplementary_figures", "evidence_type_offset_type.png"), plot = last_plot(), width = 7, height = 4, dpi = 300, units = "in")
+```
+
+## 2.3. Continent by Offset Category
+
+```{r}
+#| label: continent-offset-category-plot
+#| echo: false
+
+# Unique study per continent
+continent_offset_plot <- final_df %>%
+  filter(!is.na(study_id), !is.na(continent), !is.na(offset_category_general)) %>%
+  distinct(study_id, continent, offset_category_general) %>%
+  count(continent, offset_category_general, name = "n_studies")
+# Step 6: Pivot wider for inline prose and plotting
+continent_summary_clean <- continent_offset_plot %>%
+  pivot_wider(names_from = offset_category_general, values_from = n_studies, values_fill = 0) %>%
+  mutate(Total = coalesce(biodiversity, 0) + coalesce(carbon, 0))
+
+# plot
+make_bar_plot(
+  continent_offset_plot,
+  rlang::expr(fct_reorder(continent, n_studies, .fun = sum)),
+  rlang::expr(n_studies),
+  rlang::expr(offset_category_general),
+  "Continent",
+  "Number of Studies",
+  "Offset Category",
+  flip = TRUE
+)
+
+# Save plot
+ggsave(here("output", "supplementary_figures", "continent_by_offset_type.png"), plot = last_plot(), width = 7, height = 4, dpi = 300, units = "in")
+```
+
+
+## 2.4. Ecosystem by Offset Category 
+
+```{r}
+#| label: ecosystem-offset-category-plot
+#| echo: false
+
+# Prepare data for the bar plot
+ecosystem_offset_plot <- final_df %>%
+    filter(
+        !is.na(study_title),
+        !is.na(ecosystem_broad_type),
+        !is.na(offset_category_general)
+    ) %>%
+    distinct(study_title, ecosystem_broad_type, offset_category_general) %>%
+    count(ecosystem_broad_type, offset_category_general, name = "n_studies")
+
+# Plot using the helper function
+make_bar_plot(
+    ecosystem_offset_plot,
+    rlang::expr(fct_reorder(ecosystem_broad_type, n_studies, .fun = sum)),
+    rlang::expr(n_studies),
+    rlang::expr(offset_category_general),
+    x_lab = "Ecosystem Type",
+    y_lab = "Number of Studies",
+    fill_lab = "Offset Category",
+    flip = TRUE
+)
+
+# Save plot
+ggsave(here("output", "supplementary_figures", "ecosystem_by_offset_type.png"), plot = last_plot(), width = 7, height = 4, dpi = 300, units = "in")
+```
+
+## 2.5. Project Type (Ecological Action) by Offset Category
+
+```{r}
+#| label: project-type-offset-category-plot
+#| echo: false
+
+# Prepare plot data (study counted once per action-category pair)
+ecoact_plot_data <- final_df %>%
+    filter(!is.na(study_id), !is.na(project_broad_type), !is.na(offset_category_general)) %>%
+    distinct(study_id, project_broad_type, offset_category_general) %>%
+    count(project_broad_type, offset_category_general, name = "n_studies")
+
+# Find max value for y axis
+max_n <- max(ecoact_plot_data$n_studies)
+
+# Plot using the helper function, then manually set x (since coord_flip) axis limit
+make_bar_plot(
+    ecoact_plot_data,
+    rlang::expr(fct_reorder(project_broad_type, n_studies, .fun = sum)),
+    rlang::expr(n_studies),
+    rlang::expr(offset_category_general),
+    x_lab = "Project Type",
+    y_lab = "Number of Studies",
+    fill_lab = "Offset Category",
+    flip = TRUE
+) +
+    scale_x_discrete(expand = expansion(mult = c(0, 0.15))) + # expand right side for labels
+    scale_y_continuous(limits = c(0, max_n + 2)) # add extra space above bars
+
+# Save plot
+ggsave(here("output", "supplementary_figures", "project_type_by_offset_type.png"), plot = last_plot(), width = 7, height = 4, dpi = 300, units = "in")
+```
+
+## 2.6. Top 10 Programs
+
+```{r}
+#| label: program-offset-barplot-single
+#| echo: false
+
+# Calculate total studies per program across both categories first
+top_programs_total <- final_df %>%
+  filter(!is.na(study_id), !is.na(program_name), !is.na(offset_category_general)) %>%
+  distinct(study_id, program_name) %>%
+  count(program_name, name = "total_n") %>%
+  arrange(desc(total_n)) %>%
+  slice_max(total_n, n = 10)
+
+# Now get breakdown by offset category for those top 10 programs
+top10_programs_clean <- final_df %>%
+  filter(!is.na(study_id), !is.na(program_name), !is.na(offset_category_general)) %>%
+  semi_join(top_programs_total, by = "program_name") %>%
+  distinct(study_id, program_name, offset_category_general) %>%
+  count(program_name, offset_category_general, name = "n_studies") %>%
+  mutate(program_name = fct_reorder(program_name, n_studies, .fun = sum))
+
+# Create annotated table with total studies per program
+top10_programs_annotated <- top10_programs_clean %>%
+  group_by(program_name) %>%
+  mutate(Total = sum(n_studies)) %>%
+  ungroup()
+
+# Top program overall
+top_program <- top10_programs_annotated %>%
+  distinct(program_name, Total) %>%
+  arrange(desc(Total)) %>%
+  slice(1)
+
+# Top per category
+top_biodiversity <- top10_programs_annotated %>%
+  filter(offset_category_general == "biodiversity") %>%
+  arrange(desc(n_studies)) %>%
+  slice(1)
+
+top_carbon <- top10_programs_annotated %>%
+  filter(offset_category_general == "carbon") %>%
+  arrange(desc(n_studies)) %>%
+  slice(1)
+
+# Step 1: Total study counts per program
+program_totals <- top10_programs_clean %>%
+  group_by(program_name) %>%
+  summarise(total_studies = sum(n_studies), .groups = "drop")
+
+# Step 2: Plot
+ggplot(top10_programs_clean,
+       aes(x = program_name, y = n_studies, fill = offset_category_general)) +
+  geom_col(position = "stack", color = "black") +
+  geom_text(data = program_totals,
+            aes(x = program_name, y = total_studies, label = total_studies),
+            hjust = -0.2, size = 4, inherit.aes = FALSE) +
+  scale_fill_brewer(palette = "Pastel1") +
+  labs(
+    x = "Program",
+    y = "Number of Studies",
+    fill = "Offset Category"
+  ) +
+  coord_flip(clip = "off") +  # Let labels go beyond plot area
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top",
+    plot.margin = margin(1, 2, 1, 1, unit = "lines")  # Make room on right
+  )
+
+# Save the plot
+ggsave(here("output", "supplementary_figures", "program_by_offset_type.png"), plot = last_plot(), width = 7, height = 4, dpi = 300, units = "in")
+```
+
+## 2.7. Top 10 Policies
+
+```{r}
+#| label: policy-offset-barplot-single
+#| echo: false
+
+# Prepare data for top 10 offset policies by number of studies
+policy_offset_data <- final_df %>%
+  filter(!is.na(study_title), !is.na(policy_name), !is.na(offset_category_general)) %>%
+  distinct(study_id, policy_name, offset_category_general) %>%
+  count(policy_name, offset_category_general, name = "n_studies") %>%
+  group_by(offset_category_general) %>%
+  slice_max(n_studies, n = 5) %>%
+  ungroup() %>%
+  distinct(policy_name, .keep_all = TRUE) %>%
+  rename(Total = n_studies)
+
+# Prepare data for plotting
+policy_plot_clean <- policy_offset_data %>%
+  mutate(
+    policy_name = fct_reorder(policy_name, Total),
+    offset_category = offset_category_general
+  )
+
+# Generate bar plot for top 10 offset policies
+policy_plot <- ggplot(policy_plot_clean,
+       aes(x = policy_name, y = Total, fill = offset_category)) +
+  geom_col(color = "black") +
+  geom_text(aes(label = Total),
+            hjust = -0.3, size = 4, color = "black") +
+  scale_fill_brewer(palette = "Pastel1") +
+  labs(
+    x = "Policy",
+    y = "Number of Studies",
+    fill = "Offset Category"
+  ) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top"
+  )
+
+# Print plot
+policy_plot
+
+# Save plot as PNG
+ggsave(here("output", "supplementary_figures", "policy_by_offset_type.png"), plot = policy_plot, width = 7, height = 4, dpi = 300, units = "in")
+```
+
+## 2.8. Unique Risks Per Study
+
+```{r}
+#| label: unique-risks-per-study
+#| echo: false
+
+# Count unique risk types per study
+risk_counts <- final_df %>%
+  filter(!is.na(permanence_risk_type)) %>%
+  group_by(study_id) %>%
+  summarise(n_unique_risks = n_distinct(permanence_risk_type), .groups = "drop")
+
+# Summarize: how many studies cited 1, 2, 3, ... risk types
+risk_summary <- risk_counts %>%
+  count(n_unique_risks, name = "n_studies")
+
+# Plot
+ggplot(risk_summary, aes(x = factor(n_unique_risks), y = n_studies)) +
+  geom_col(fill = "rosybrown2") +
+  geom_text(aes(label = n_studies), vjust = -0.4) +
+  labs(
+    x = "Number of Distinct Risk Types Cited",
+    y = "Number of Studies"
+  ) +
+  theme_minimal()
+
+# Save plot as PNG
+ggsave(here("output", "supplementary_figures", "unique_risks_per_study.png"), plot = last_plot(), width = 7, height = 4, dpi = 300, units = "in")
+```
+
+## 2.9. Temporal Trends in Risk Domain
+
+```{r}
+#| label: temporal-trends-permanence-risks-summary-domain
+#| echo: false
+
+# Step 0: Set standard domain colors
+domain_colors <- c(
+  "non-physical" = "#4E79A7",       # Blue
+  "physical" = "#59A14F",           # Green
+  "methodological" = "#E15759"      # Red
+)
+
+# Step 1: Filter and bin data by 5-year intervals (corrected)
+final_df_binned <- final_df %>%
+  filter(!is.na(permanence_risk_domain), !is.na(study_publication_year)) %>%
+  mutate(
+    period = cut(
+      study_publication_year,
+      breaks = c(1990, 1995, 2000, 2005, 2010, 2015, 2020, 2026),
+      labels = c("1990–1994", "1995–1999", "2000–2004", "2005–2009", "2010–2014", "2015–2019", "2020–2025"),
+      right = FALSE
+    )
+  )
+
+# Step 2: Summarize the number of distinct studies per period × permanence risk domain
+domain_trends_binned <- final_df_binned %>%
+  distinct(study_id, period, permanence_risk_domain) %>%
+  count(period, permanence_risk_domain, name = "n_studies") %>%
+  complete(period, permanence_risk_domain, fill = list(n_studies = 0)) %>%
+  filter(!is.na(period))
+
+# Step 3: Plot with standardized domain colors
+ggplot(domain_trends_binned, aes(x = period, y = n_studies, fill = permanence_risk_domain)) +
+  geom_col(position = "dodge", color = "black") +
+  scale_fill_manual(values = domain_colors, name = "Risk Domain") +
+  labs(
+    x = "Publication Period",
+    y = "Number of Studies"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "top"
+  )
+
+# Save plot as PNG
+ggsave(here("output", "supplementary_figures", "temporal_trend_risk_domain.png"), plot = last_plot(), width = 7, height = 4, dpi = 300, units = "in")
+```
+
+## 2.10. Heatmap - Risk Pair Frequency
+
+```{r}
+#| label: risk-pair-frequency-heatmap
+#| echo: false
+
+# Prepare data for heatmap
+pair_by_offset <- final_df %>%
+  filter(!is.na(permanence_risk_type), !is.na(offset_category_general)) %>%
+  group_by(study_title, offset_category_general) %>%
+  summarise(risks = list(unique(permanence_risk_type)), .groups = "drop") %>%
+  mutate(pairs = map(risks, get_combos, combo_size = 2)) %>%
+  unnest(pairs) %>%
+  mutate(risk_pair = map_chr(pairs, ~ str_c(sort(.x), collapse = " + "))) %>%
+  count(offset_category_general, risk_pair)
+
+# Top 10 pairs only
+top_pairs <- pair_counts %>%
+  slice_max(n, n = 10) %>%
+  rename(risk_pair = pair) %>%
+  mutate(risk_pair = str_to_lower(str_trim(risk_pair)))
+
+# Filter heatmap data to top 10 pairs
+pair_heat <- pair_by_offset %>%
+  mutate(risk_pair = str_to_lower(str_trim(risk_pair))) %>%
+  filter(risk_pair %in% top_pairs$risk_pair) %>%
+  complete(offset_category_general, risk_pair, fill = list(n = 0))
+
+# Plot
+ggplot(pair_heat, aes(x = offset_category_general, y = fct_reorder(risk_pair, n), fill = n)) +
+  geom_tile(color = "white", linewidth = 0.7, width = 1) +
+  geom_text(
+    aes(label = n, color = factor(case_when(n <= 2 ~ "light", TRUE ~ "dark"))),
+    size = 5 # reduced from 5
+  ) +
+  scale_fill_viridis_c(
+    option = "mako",
+    trans = "log1p",
+    begin = 0.1,
+    end = 0.9,
+    guide = guide_colorbar(barwidth = 1.2, barheight = 10, title.position = "top", title.hjust = 0.5)
+  ) +
+  scale_color_manual(
+    values = c("light" = "white", "dark" = "black"),
+    guide = "none"
+  ) +
+  labs(
+    x = "Offset Category",
+    y = "Risk Type Pair",
+    fill = "Study Count"
+  ) +
+  theme_minimal(base_size = 15) + # reduced from 20
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 13),
+    axis.text.y = element_text(lineheight = 1.1, size = 13),
+    axis.title = element_text(size = 15),
+    legend.position = "right",
+    legend.title = element_text(size = 13),
+    legend.text = element_text(size = 12),
+    plot.title = element_text(hjust = 1, size = 16)
+  )
+
+# Save plot as PNG
+ggsave(here("output", "supplementary_figures", "risk_type_pair_offset_category.png"), plot = last_plot(), width = 10, height = 14, dpi = 300, units = "in")
+```

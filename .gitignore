@@ -1,7 +1,7 @@
 # Gitignore File
 
 # all word files
-.docx
+*.docx
 
 # R and RStudio files
 .Rproj.user/
@@ -36,3 +36,7 @@ writing/
 
 # Presentation (powerpoint) files
 presentations/
+
+# CSV and Quarto files
+*.csv
+

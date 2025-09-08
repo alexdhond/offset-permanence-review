@@ -1,10 +1,9 @@
 ---
 title: "extract_figures"
 format: html
-editor: visual
 ---
 
-Run this after running the main "permanence risks analysis" file. This is for exporting certain plots for use in the manuscript. 
+Run this after running the main "permanence risks analysis" file. This is for exporting certain plots for use in the manuscript.
 
 # Plot 1: Diverging Bar Plot (offset type x risk type)
 
@@ -105,7 +104,7 @@ ggplot(risk_long, aes(x = risk_type_label, y = n, fill = offset_category)) +
   coord_flip(clip = "off")+
   labs(
     title = "Risk Type by Offset Category",
-    x = "Risk Type",
+    x = NULL,
     y = "Number of Studies"
   ) +
 theme_minimal(base_size = 20) +  # base font size
@@ -123,10 +122,25 @@ theme_minimal(base_size = 20) +  # base font size
   )
 
 ```
+
 ## Save Plot 1
+
 ```{r}
 ggsave(
-  filename = "fig-diverging-risk-bar.png",
+  filename = here("output", "fig-diverging-risk-bar.png"),
+  plot = last_plot(),
+  width = 20,
+  height = 24,
+  dpi = 600,
+  units = "in"
+)
+```
+
+## Save Plot 1 (SVG)
+
+```{r}
+ggsave(
+  filename = here("output", "fig-diverging-risk-bar.svg"),
   plot = last_plot(),
   width = 20,
   height = 24,
@@ -223,6 +237,7 @@ ggplot(heatmap_normalized, aes(x = continent, y = permanence_risk_category, fill
 ```
 
 ## Save Plot 2
+
 ```{r}
 ggsave(
   filename = "../output/fig-heatmap-continent.png",  # Save to output folder
@@ -235,182 +250,7 @@ ggsave(
 
 ```
 
-
-
-
-
-
-
 # Plot 3: Temporal Permanence Trends by Top 2 Programs
-```{r}
-
-# === STEP 1: Get all unique risk categories from both datasets ===
-all_risks <- union(
-  unique(risk_cat_binned_uswetlands$permanence_risk_category),
-  unique(risk_cat_binned_redd$permanence_risk_category)
-)
-
-# === STEP 2: Apply consistent factor levels and label program group ===
-risk_cat_binned_uswetlands <- risk_cat_binned_uswetlands %>%
-  filter(!is.na(permanence_risk_category), !is.na(period)) %>%
-  mutate(
-    program_group = "US Wetland Programs",
-    permanence_risk_category = factor(permanence_risk_category, levels = all_risks)
-  )
-
-risk_cat_binned_redd <- risk_cat_binned_redd %>%
-  filter(!is.na(permanence_risk_category), !is.na(period)) %>%
-  mutate(
-    program_group = "REDD+",
-    permanence_risk_category = factor(permanence_risk_category, levels = all_risks)
-  )
-
-# === STEP 3: Combine both datasets ===
-risk_cat_binned_combined <- bind_rows(
-  risk_cat_binned_uswetlands,
-  risk_cat_binned_redd
-)
-
-risk_cat_binned_combined <- risk_cat_binned_combined %>%
-  group_by(program_group, period) %>%
-  mutate(total_studies = sum(n_studies)) %>%
-  ungroup() %>%
-  mutate(
-    percentage = (n_studies / total_studies) * 100,
-    label = ifelse(n_studies > 0, as.character(n_studies), "")  # only show counts > 0
-  )
-
-# === STEP 4: Get domain info for each category ===
-all_categories <- final_df %>%
-  filter(permanence_risk_category %in% all_risks) %>%
-  distinct(permanence_risk_category, permanence_risk_domain)
-
-# === STEP 5: Assign unique colors to each category across domains ===
-
-# Define fixed base colors for domains
-domain_base_colors <- c(
-  "non-physical" = "#4E79A7",     # blue
-  "physical" = "#59A14F",         # green
-  "methodological" = "#E15759"    # red
-)
-
-# Generate distinct shades within each domain
-get_domain_palette <- function(base_color, n) {
-  colorRampPalette(c("#FFFFFF", base_color))(n + 1)[-1]
-}
-
-# Build the full color mapping per category (corrected!)
-category_colors <- all_categories %>%
-  group_by(permanence_risk_domain) %>%
-  arrange(permanence_risk_category) %>%
-  mutate(color = get_domain_palette(
-    base_color = domain_base_colors[permanence_risk_domain[1]],  # ✅ FIXED HERE
-    n = n()
-  )) %>%
-  ungroup() %>%
-  select(permanence_risk_category, color) %>%
-  deframe()
-
-# Add fallback gray color for any unmatched categories
-missing_risks <- setdiff(all_risks, names(category_colors))
-category_colors[missing_risks] <- "gray70"
-
-# === STEP 6.5: Reorder risk category factor levels for grouped legend ===
-
-# Create a tibble of categories and their assigned color (from earlier)
-category_order_df <- tibble::tibble(
-  category = names(category_colors),
-  color = unname(category_colors)
-) %>%
-  left_join(all_categories, by = c("category" = "permanence_risk_category"))
-
-library(colorspace)
-
-# Extract color vector
-hex_colors <- unname(category_colors)
-
-# Convert all hex colors to RGB and calculate luminance
-rgb_matrix <- hex2RGB(hex_colors)@coords
-luminance_vals <- 0.299 * rgb_matrix[,1] + 0.587 * rgb_matrix[,2] + 0.114 * rgb_matrix[,3]
-
-# Build dataframe with luminance
-category_order_df <- tibble::tibble(
-  category = names(category_colors),
-  color = hex_colors,
-  luminance = luminance_vals
-) %>%
-  left_join(all_categories, by = c("category" = "permanence_risk_category")) %>%
-  mutate(permanence_risk_domain = factor(permanence_risk_domain,
-                                         levels = c("physical", "non-physical", "methodological"))) %>%
-  arrange(permanence_risk_domain, desc(luminance))
-
-# Set this as the new ordered factor
-ordered_levels <- category_order_df$category
-
-# Apply to combined dataset
-risk_cat_binned_combined <- risk_cat_binned_combined %>%
-  mutate(permanence_risk_category = factor(permanence_risk_category, levels = ordered_levels))
-
-# Also reorder category_colors
-category_colors <- category_colors[ordered_levels]
-
-# rename factor levels
-risk_cat_binned_combined <- risk_cat_binned_combined %>%
-  mutate(program_group = recode(program_group,
-    "REDD+" = "REDD+",
-    "US Wetland Programs" = "U.S. CWA Permitting and Mitigation Banking"
-  ))
-
-# Calculate total studies per period
-totals_df <- risk_cat_binned_combined %>%
-  group_by(program_group, period) %>%
-  summarise(total = sum(n_studies), .groups = "drop")
-
-# === STEP 6: Final Plot ===
-ggplot(risk_cat_binned_combined, aes(x = period, y = percentage, fill = permanence_risk_category)) +
-  geom_col(color = "black") +
-  geom_text(data = totals_df, aes(x = period, y = 105, label = total),
-          inherit.aes = FALSE, size = 7)+
-  facet_wrap(~ program_group, ncol = 1) +
-  scale_fill_manual(values = category_colors, name = "Risk Category") +
-  labs(
-    x = "Publication Period",
-    y = "Percentage of Studies"
-  ) +
-  theme_minimal(base_size = 20) +
-  theme(
-    panel.spacing = unit(2, "lines"),  # or "cm", "pt", etc.
-    plot.title = element_text(hjust = 0.5),
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "top",
-    legend.title = element_blank(),
-    legend.text = element_text(size = 14),
-    strip.text = element_text(size = 14),
-    legend.box = "vertical",
-    plot.margin = margin(t = 40, r = 10, b = 10, l = 10)
-  ) +
-  guides(fill = guide_legend(ncol = 2, byrow = TRUE))
-
-```
-## Save Plot 3
-```{r}
-ggsave(
-  filename = "../output/fig-temporal-risks-program.png",  # Save to output folder
-  plot = last_plot(),                                 # Or specify your plot object
-  width = 12,                                          # Width in inches (adjust as needed)
-  height = 14,                                         # Height in inches (adjust as needed)
-  dpi = 600,                                          # High-resolution
-  units = "in"                                        # Use inches for journals
-)
-
-```
-
-
-
-
-
-### testing
-
 
 ```{r}
 library(dplyr)
@@ -511,23 +351,22 @@ ggplot(plot_df, aes(x = period, y = percentage, fill = permanence_risk_category)
   geom_text(
     data = total_study_counts,
     aes(x = period, y = 105, label = total_studies),
-    inherit.aes = FALSE, size = 5
+    inherit.aes = FALSE, size = 8
   ) +
   facet_wrap(~ program_group, ncol = 1) +
   scale_fill_manual(values = category_colors) +
-  scale_y_continuous(limits = c(0, 110), expand = expansion(mult = c(0, 0.05))) +
   labs(
-    x = "Publication Period",
+    x = NULL,
     y = "Percentage of Studies",
     fill = "Risk Category"
   ) +
-  theme_minimal(base_size = 16) +
+  theme_minimal(base_size = 20) +
   theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.text.x = element_text(size = 20, angle = 45, hjust = 1),
     legend.position = "top",
     legend.title = element_blank(),
-    legend.text = element_text(size = 12),
-    strip.text = element_text(size = 14),
+    legend.text = element_text(size = 20),
+    strip.text = element_text(size = 20),
     panel.spacing = unit(2, "lines"),
     plot.margin = margin(30, 10, 10, 10)
   ) +
@@ -535,11 +374,152 @@ ggplot(plot_df, aes(x = period, y = percentage, fill = permanence_risk_category)
 
 ```
 
-
 ## Save Plot 3
+
 ```{r}
 ggsave(
-  filename = "../output/TEST-temporal-risks-program.png",  # Save to output folder
+  filename = "../output/fig-temporal-risks-program.png",  # Save to output folder
+  plot = last_plot(),                                 # Or specify your plot object
+  width = 12,                                          # Width in inches (adjust as needed)
+  height = 14,                                         # Height in inches (adjust as needed)
+  dpi = 600,                                          # High-resolution
+  units = "in"                                        # Use inches for journals
+)
+```
+
+## Save Plot 3 SVG
+
+```{r}
+ggsave(
+  filename = "../output/fig-temporal-risks-program.svg",  # Save as SVG
+  plot = last_plot(),
+  width = 15,
+  height = 16,
+  units = "in"  # Units still matter for defining physical size
+)
+
+```
+
+# Plot 4: Faceted Pie Chart of Permanence Risk Categories by Continent
+
+```{r continent-pie-ordered, fig.width=10, fig.height=6, message=FALSE, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+library(colorspace)
+
+# STEP 0: Filter and prepare data --------------------------------------------
+continent_df <- final_df %>%
+  filter(
+    !is.na(study_id),
+    !is.na(permanence_risk_category),
+    !is.na(permanence_risk_domain),
+    !is.na(continent)
+  ) %>%
+  # Get unique study-category-continent combos
+  distinct(study_id, continent, permanence_risk_category, permanence_risk_domain)
+
+# STEP 1: Assign fractional weight per study/continent -----------------------
+weighted_df <- continent_df %>%
+  group_by(study_id, continent) %>%
+  mutate(weight = 1 / n()) %>%
+  ungroup()
+
+# STEP 2: Aggregate to get study-weighted counts -----------------------------
+continent_risk <- weighted_df %>%
+  group_by(continent, permanence_risk_category, permanence_risk_domain) %>%
+  summarise(weighted_sum = sum(weight), .groups = "drop")
+
+# STEP 3: Compute percentages per continent ---------------------------------
+continent_totals <- continent_risk %>%
+  group_by(continent) %>%
+  summarise(total_studies = sum(weighted_sum), .groups = "drop")
+
+plot_df <- continent_risk %>%
+  left_join(continent_totals, by = "continent") %>%
+  mutate(
+    percentage = (weighted_sum / total_studies) * 100,
+    label = ifelse(percentage >= 5, paste0(round(percentage, 1), "%"), "") # only label slices ≥5%
+  )
+
+# STEP 4: Create ordered palette --------------------------------------------
+domain_base_colors <- c(
+  "physical" = "#59A14F",        # green
+  "non-physical" = "#4E79A7",    # blue
+  "methodological" = "#E15759"   # red
+)
+
+get_domain_palette <- function(base_color, n) {
+  colorRampPalette(c("#FFFFFF", base_color))(n + 1)[-1]
+}
+
+# Compute base category colors
+category_colors_df <- plot_df %>%
+  distinct(permanence_risk_category, permanence_risk_domain) %>%
+  group_by(permanence_risk_domain) %>%
+  arrange(permanence_risk_category) %>%
+  mutate(color = get_domain_palette(domain_base_colors[permanence_risk_domain[1]], n())) %>%
+  ungroup()
+
+# Compute luminance for dark -> light sorting
+rgb_matrix <- hex2RGB(category_colors_df$color)@coords
+luminance_vals <- 0.299 * rgb_matrix[, 1] + 0.587 * rgb_matrix[, 2] + 0.114 * rgb_matrix[, 3]
+
+category_colors_df <- category_colors_df %>%
+  mutate(luminance = luminance_vals) %>%
+  mutate(permanence_risk_domain = factor(permanence_risk_domain, levels = c("physical","non-physical","methodological"))) %>%
+  arrange(permanence_risk_domain, luminance)  # dark -> light
+
+# Reorder factor levels and create color vector
+ordered_levels <- category_colors_df$permanence_risk_category
+category_colors <- setNames(category_colors_df$color, category_colors_df$permanence_risk_category)
+
+plot_df <- plot_df %>%
+  mutate(permanence_risk_category = factor(permanence_risk_category, levels = ordered_levels))
+
+# STEP 5: Add facet labels with total studies --------------------------------
+facet_labels <- continent_totals %>%
+  mutate(facet_label = paste0(continent, " (", round(total_studies), " studies)")) %>%
+  select(continent, facet_label)
+
+plot_df <- plot_df %>%
+  left_join(facet_labels, by = "continent")
+
+# STEP 6: Plot faceted, ordered pies ----------------------------------------
+ggplot(plot_df, aes(x = "", y = percentage, fill = permanence_risk_category)) +
+  geom_col(color = "black", size = 0.8, alpha = 0.9)+
+  # geom_text(aes(label = label), position = position_stack(vjust = 0.5), size = 4) + # REMOVE THIS
+  coord_polar(theta = "y") +
+  facet_wrap(~ facet_label) +
+  scale_fill_manual(values = category_colors) +
+  labs(
+    x = NULL, y = NULL,
+    fill = "Risk Category",
+    title = "Distribution of Permanence Risk Categories by Continent"
+  ) +
+  theme_void(base_size = 16) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 12),
+    strip.text = element_text(size = 14, face = "bold"),
+    panel.spacing = unit(2, "lines"),
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5)
+  ) +
+  guides(
+    fill = guide_legend(
+      nrow = 5,
+      ncol = 2,
+      byrow = TRUE
+    )
+  )
+
+```
+
+## Save Plot 4
+
+```{r}
+ggsave(
+  filename = "../output/facet-cont-risk-cat.png",  # Save to output folder
   plot = last_plot(),                                 # Or specify your plot object
   width = 12,                                          # Width in inches (adjust as needed)
   height = 14,                                         # Height in inches (adjust as needed)
@@ -549,5 +529,484 @@ ggsave(
 
 ```
 
+# Plot 4a: Individual Pie Charts (Continent x Risk Category)
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+make_pie <- function(df, colors) {
+  ggplot(df, aes(x = "", y = percentage, fill = permanence_risk_category)) +
+    geom_col(color = "black") +
+    coord_polar(theta = "y") +
+    scale_fill_manual(values = colors) +
+    theme_void() +
+    theme(
+      legend.position = "none",
+      aspect.ratio = 1,  # perfect circle
+      plot.margin = margin(0, 0, 0, 0),
+      plot.background = element_rect(fill = NA, color = NA),
+      panel.background = element_rect(fill = NA, color = NA)
+    )
+}
+
+facet_list <- unique(plot_df$facet_label)
+
+for (facet in facet_list) {
+  df_facet <- plot_df %>% filter(facet_label == facet)
+  
+  # Extract continent name
+  continent_name <- sub(" \\(.*", "", facet)
+  file_base <- paste0("pie_", gsub(" ", "_", continent_name))
+  
+  # Save raw PNG with transparent background
+  raw_file <- paste0(file_base, "_raw.png")
+  ggsave(
+    filename = here("output", raw_file),
+    plot = make_pie(df_facet, category_colors),
+    width = 6, height = 6, dpi = 600,
+    bg = "transparent"
+  )
+  
+}
+
+```
+
+# Plot 4b: Extract the legend
+
+```{r}
+library(grid)
+library(gtable)
+
+# Add non-breaking spaces to labels for visual padding only
+pretty_labels <- paste0(levels(plot_df$permanence_risk_category), "\u00A0\u00A0\u00A0")
+
+legend_plot <- ggplot(plot_df, aes(
+  x = permanence_risk_category,
+  y = percentage,
+  fill = permanence_risk_category
+)) +
+  geom_col(color = "black") +
+  scale_fill_manual(
+    values = category_colors,
+    labels = pretty_labels   # <--- apply padding here
+  ) +
+  guides(
+    fill = guide_legend(
+      nrow = 5,
+      ncol = 2,
+      byrow = TRUE,
+      override.aes = list(color = "black")
+    )
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 12)
+  )
 
 
+# Convert to gtable
+g <- ggplotGrob(legend_plot)
+
+# Locate and extract the guide-box (legend)
+legend_index <- which(sapply(g$grobs, function(x) x$name) == "guide-box")
+legend <- g$grobs[[legend_index]]
+
+# add spacing
+legend$widths <- legend$widths * 1.5
+
+# Optional: Preview
+grid.newpage()
+grid.draw(legend)
+
+# Save legend as high-res PNG with black outlines
+ggsave(
+  filename = here::here("output", "risk_category_legend_5x2_black.png"),
+  plot = grid::grid.grabExpr(grid::grid.draw(legend)),
+  width = 20, height = 4, dpi = 600, bg = "transparent"
+)
+
+```
+
+# Plot 5: Nature-style World Map
+
+```{r}
+library(ggplot2)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(dplyr)
+
+# 1. Load data
+world <- ne_countries(scale = "medium", returnclass = "sf") %>%
+  filter(sovereignt != "Antarctica")
+coast <- ne_download(scale = 50, type = "coastline", category = "physical", returnclass = "sf")
+
+# 2. Transform to Robinson projection
+robin_crs <- "+proj=robin"
+world_robin <- st_transform(world, crs = robin_crs)
+coast_robin <- st_transform(coast, crs = robin_crs)
+
+# 3. Crop rectangle in projected space
+bbox_crop <- st_bbox(c(xmin = -18000000, xmax = 18000000,
+                       ymin = -7000000, ymax = 9000000),
+                     crs = robin_crs)
+
+world_crop <- st_intersection(world_robin, st_as_sfc(bbox_crop))
+coast_crop <- st_intersection(coast_robin, st_as_sfc(bbox_crop))
+
+
+# 4. Fixed stadium function
+make_stadium <- function(xmin, xmax, ymin, ymax, n = 200, crs) {
+  r <- (ymax - ymin) / 2  # radius = half of height
+  
+  # Center y at 0 for symmetry
+  y_center <- (ymax + ymin) / 2
+  
+  # Left semicircle
+  theta_left <- seq(pi/2, 3*pi/2, length.out = n)
+  left_arc <- cbind(
+    xmin + r*cos(theta_left), 
+    y_center + r*sin(theta_left)
+  )
+  
+  # Right semicircle
+  theta_right <- seq(-pi/2, pi/2, length.out = n)
+  right_arc <- cbind(
+    xmax + r*cos(theta_right), 
+    y_center + r*sin(theta_right)
+  )
+  
+  # Combine into polygon
+  coords <- rbind(left_arc, right_arc, left_arc[1, ])
+  st_sfc(st_polygon(list(coords)), crs = crs)
+}
+
+stadium <- make_stadium(
+  xmin = -6000000, xmax = 10000000,  # bring in sides
+  ymin = -7000000, ymax = 9000000,
+  crs = robin_crs
+)
+
+# 5. Clip world and coast to stadium
+world_stadium <- st_intersection(world_crop, stadium)
+coast_stadium <- st_intersection(coast_crop, stadium)
+
+# 6. Plot Nature-style map
+ggplot() +
+  geom_sf(data = world_stadium, fill = "bisque1", color = NA) +
+  geom_sf(data = coast_stadium, color = "gray50", size = 0.2) +
+  geom_sf(data = stadium, fill = NA, color = "black", size = 0.5) +  # outline
+  theme_void() +
+  theme(
+    panel.background = element_rect(fill = "white", color = NA),
+    plot.background = element_rect(fill = "white", color = NA),
+    plot.margin = margin(0,0,0,0)
+  )
+
+```
+
+## Save Plot 5
+
+```{r}
+ggsave(
+  filename = "../output/world_map_nature_style.svg",  # Save to output folder
+  plot = last_plot(),                                 # Or specify your plot object
+  width = 12,                                          # Width in inches (adjust as needed)
+  height = 6,                                         # Height in inches (adjust as needed)
+  dpi = 600,                                          # High-resolution
+  units = "in"                                        # Use inches for journals
+)
+```
+
+# Plot 6: World with pie charts
+
+```{r}
+
+# --- 1. Define approximate continent coordinates (lon/lat) ------------------
+continent_coords <- data.frame(
+  continent = c("Africa", "Asia", "Europe", "North America", "South America", "Oceania"),
+  lon = c(25, 90, 10, -100, -60, 140),
+  lat = c(5, 40, 52, 40, -15, -30)
+)
+
+# --- 2. Project to Robinson CRS ---
+continent_sf <- st_as_sf(continent_coords, coords = c("lon", "lat"), crs = 4326)
+continent_robin <- st_transform(continent_sf, crs = robin_crs)
+continent_coords_robin <- st_coordinates(continent_robin)
+continent_coords <- cbind(continent_coords, continent_coords_robin)
+
+# --- 3. Create abbreviation + study count labels ---
+continent_abbrev <- c(
+  "Africa" = "AF",
+  "Asia" = "AS",
+  "Europe" = "EU",
+  "North America" = "NA",
+  "South America" = "SA",
+  "Oceania" = "OC"
+)
+
+# Join totals for labeling
+pie_df <- plot_df %>%
+  select(continent, permanence_risk_category, percentage, total_studies) %>%
+  tidyr::pivot_wider(names_from = permanence_risk_category, 
+                     values_from = percentage, values_fill = 0) %>%
+  left_join(continent_coords, by = "continent") %>%
+  mutate(
+    abbrev = continent_abbrev[continent],
+    label = paste0(abbrev, " (", round(total_studies), ")")
+  )
+
+# --- 4. Add manual label offsets -------------------------------------------
+pie_df <- pie_df %>%
+  mutate(
+    label_X = X,  # start at pie center
+    label_Y = Y
+  ) %>%
+  mutate(
+    label_X = case_when(
+      continent == "North America" ~ X,         # no horizontal move
+      continent == "South America" ~ X - 3e6,   # move left
+      continent == "Africa"        ~ X,         # no horizontal move
+      continent == "Europe"        ~ X - 3e6,   # move left
+      continent == "Oceania"       ~ X - 1e6,   # move left
+      continent == "Asia"          ~ X,         # no horizontal move
+      TRUE ~ X
+    ),
+    label_Y = case_when(
+      continent == "North America" ~ Y + 2e6,   # move up
+      continent == "South America" ~ Y,         # no vertical move
+      continent == "Africa"        ~ Y + 2e6,   # move up
+      continent == "Europe"        ~ Y,         # no vertical move
+      continent == "Oceania"       ~ Y - 2e6,   # move down
+      continent == "Asia"          ~ Y + 2e6,   # move up
+      TRUE ~ Y
+    )
+  )
+
+# --- 5. Plot map + pies with manually moved labels -------------------------
+ggplot() +
+  # Base map
+  geom_sf(data = world_stadium, fill = "bisque1", color = NA) +
+  geom_sf(data = coast_stadium, color = "gray50", size = 0.2) +
+  geom_sf(data = stadium, fill = NA, color = "black", size = 0.5) +
+  
+  # Pies
+  geom_scatterpie(
+    data = pie_df,
+    aes(x = X, y = Y, r = 1.4e6),  # adjust radius
+    cols = levels(plot_df$permanence_risk_category),
+    color = "black", size = 0.3
+  ) +
+  scale_fill_manual(values = category_colors) +
+  
+  # Labels at adjusted positions
+  geom_text(
+    data = pie_df,
+    aes(x = label_X, y = label_Y, label = label),
+    size = 3.5,
+    fontface = "bold"
+  ) +
+  
+  coord_sf(crs = robin_crs) +
+  theme_void(base_size = 16) +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 12),
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+    plot.margin = margin(t = 5, r = 1, b = 5, l = 1) # extra bottom space
+  ) +
+  guides(
+    fill = guide_legend(nrow = 5, ncol = 2, byrow = TRUE)
+  )
+
+```
+
+## Save Plot 6
+
+```{r}
+ggsave(
+  filename = "../output/world_map_pie_charts_leg_top.svg",  # Save to output folder
+  plot = last_plot(),                                 # Or specify your plot object
+  width = 12,                                          # Width in inches (adjust as needed)
+  height = 6,                                         # Height in inches (adjust as needed)
+  dpi = 600,                                          # High-resolution
+  units = "in"                                        # Use inches for journals
+)
+```
+
+# Plot 7: Individual continent maps
+
+```{r}
+# Packages
+library(sf)
+library(ggplot2)
+library(rnaturalearth)
+library(dplyr)
+
+# 1. Load world map
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+# ---- 2. Define continent membership manually ----
+continent_countries <- list(
+  
+  "North America" = c(
+    "Canada", "United States of America", "Mexico", "Greenland",
+    "Guatemala", "Belize", "Honduras", "El Salvador", "Nicaragua", 
+    "Costa Rica", "Panama", "The Bahamas", "Cuba", "Jamaica", 
+    "Haiti", "Dominican Republic", "Trinidad and Tobago", "Barbados",
+    "Saint Lucia", "Saint Vincent and the Grenadines", "Grenada",
+    "Saint Kitts and Nevis", "Antigua and Barbuda", "Dominica"
+  ),
+  
+  "South America" = c(
+    "Colombia", "Venezuela", "Guyana", "Suriname", "Ecuador",
+    "Peru", "Brazil", "Bolivia", "Paraguay", "Chile", 
+    "Argentina", "Uruguay", "Falkland Islands", "French Guiana"
+  ),
+  
+  "Europe" = c(
+    "Portugal", "Spain", "France", "Belgium", "Netherlands", "Germany",
+    "Luxembourg", "Switzerland", "Austria", "Italy", "Slovenia", "Croatia",
+    "Bosnia and Herzegovina", "Montenegro", "Albania", "Greece", 
+    "North Macedonia", "Bulgaria", "Romania", "Moldova", 
+    "Hungary", "Slovakia", "Czechia", "Poland", "Lithuania", 
+    "Latvia", "Estonia", "Finland", "Sweden", "Norway", "Denmark", 
+    "Iceland", "Ireland", "United Kingdom", "Belarus", "Ukraine",
+    "Turkey", "Russia", "Georgia", "Armenia", "Azerbaijan",
+    "Republic of Serbia", "Malta", "Liechtenstein", "Andorra", 
+    "Monaco", "San Marino", "Kosovo", "Vatican"
+  ),
+  
+  "Africa" = c(
+    "Morocco", "Algeria", "Tunisia", "Libya", "Egypt", "Mauritania", 
+    "Mali", "Senegal", "Gambia", "Guinea-Bissau", "Guinea", "Sierra Leone",
+    "Liberia", "Ivory Coast", "Ghana", "Togo", "Benin", "Burkina Faso", 
+    "Niger", "Nigeria", "Chad", "Sudan", "South Sudan", "Eritrea", 
+    "Djibouti", "Somalia", "Ethiopia", "Central African Republic", "Cameroon",
+    "Equatorial Guinea", "Gabon", "Republic of the Congo", "Democratic Republic of the Congo",
+    "Uganda", "Kenya", "Rwanda", "Burundi", "United Republic of Tanzania",
+    "Angola", "Zambia", "Malawi", "Mozambique", "Zimbabwe", "Namibia", 
+    "Botswana", "South Africa", "Lesotho", "eSwatini", "Madagascar", 
+    "Cabo Verde", "São Tomé and Principe", "Comoros", "Somaliland", "Western Sahara"
+  ),
+  
+  "Asia" = c(
+    "China", "India", "Pakistan", "Afghanistan", "Nepal", "Bhutan", 
+    "Bangladesh", "Myanmar", "Thailand", "Laos", "Cambodia", "Vietnam", 
+    "Malaysia", "Singapore", "Indonesia", "Philippines", "Brunei", 
+    "Mongolia", "Japan", "North Korea", "South Korea", 
+    "Kazakhstan", "Uzbekistan", "Turkmenistan", "Kyrgyzstan", "Tajikistan", 
+    "Iran", "Iraq", "Syria", "Lebanon", "Israel", "Jordan", 
+    "Saudi Arabia", "Yemen", "Oman", "United Arab Emirates", "Qatar", 
+    "Bahrain", "Kuwait", "Georgia", "Armenia", "Azerbaijan", 
+    "Russia", "Turkey", "East Timor", "Taiwan", "Sri Lanka", "Cyprus"
+  ),
+  
+  "Oceania" = c(
+    "Australia", "New Zealand", "Papua New Guinea", "Fiji", "Solomon Islands", 
+    "Vanuatu", "Samoa", "Tonga", "Kiribati", "Tuvalu", "Palau", 
+    "Marshall Islands", "Nauru", "Federated States of Micronesia"
+  )
+)
+
+# ---- 3. Create sf object for each continent ----
+continent_sf <- lapply(names(continent_countries), function(cont) {
+  world %>% filter(admin %in% continent_countries[[cont]])
+})
+names(continent_sf) <- names(continent_countries)
+
+# ---- 4. Manually expanded bounding boxes (~20% bigger) ----
+continent_bboxes <- list(
+  "North America" = c(xmin = -180, xmax = -20, ymin = -5, ymax = 90),
+  "South America" = c(xmin = -110, xmax = -15, ymin = -70, ymax = 25),
+  "Europe"        = c(xmin = -35, xmax = 65, ymin = 25, ymax = 80),
+  "Africa"        = c(xmin = -35, xmax = 70, ymin = -50, ymax = 45),
+  "Asia"          = c(xmin = 15, xmax = 190, ymin = -25, ymax = 90),
+  "Oceania"       = c(xmin = 90, xmax = 190, ymin = -60, ymax = 15)
+)
+
+# ---- 5. Plotting function ----
+plot_continent <- function(continent_name, bbox_coords) {
+  bbox <- st_bbox(bbox_coords, crs = st_crs(4326)) %>% st_as_sfc()
+  
+  ggplot() +
+    geom_sf(data = continent_sf[[continent_name]], 
+            fill = "bisque1", color = "gray40", size = 0.2) +
+    geom_sf(data = bbox, fill = NA, color = "red", linetype = "dashed") +
+    coord_sf(
+      xlim = c(bbox_coords["xmin"], bbox_coords["xmax"]),
+      ylim = c(bbox_coords["ymin"], bbox_coords["ymax"]),
+      expand = FALSE
+    ) +
+    theme_void(base_size = 14)
+}
+
+# ---- 6. Generate plots ----
+plots <- lapply(names(continent_bboxes), function(cont) {
+  plot_continent(cont, continent_bboxes[[cont]])
+})
+
+# Example: view them
+# plots[[1]]  # North America
+# plots[[2]]  # South America
+# plots[[3]]  # Europe
+# plots[[4]]  # Africa
+# plots[[5]]  # Asia
+# plots[[6]]  # Oceania
+
+
+# ---- Clean plotting function (no red dashed box) ----
+plot_continent_clean <- function(continent_name, bbox_coords) {
+  ggplot() +
+    geom_sf(data = continent_sf[[continent_name]], 
+            fill = "bisque1", color = "gray40", size = 0.2) +
+    coord_sf(
+      xlim = c(bbox_coords["xmin"], bbox_coords["xmax"]),
+      ylim = c(bbox_coords["ymin"], bbox_coords["ymax"]),
+      expand = FALSE
+    ) +
+    theme_void(base_size = 14) +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold")
+    )
+}
+
+# ---- Generate clean plots ----
+clean_plots <- lapply(names(continent_bboxes), function(cont) {
+  plot_continent_clean(cont, continent_bboxes[[cont]])
+})
+names(clean_plots) <- names(continent_bboxes)
+
+
+# Example: view them
+clean_plots[[1]]  # North America
+clean_plots[[2]]  # South America
+clean_plots[[3]]  # Europe
+clean_plots[[4]]  # Africa
+clean_plots[[5]]  # Asia
+clean_plots[[6]]  # Oceania
+```
+
+## Save Plot 7
+
+```{r}
+library(svglite)
+
+# ---- Export each plot as SVG ----
+output_dir <- "output"    # choose your folder
+dir.create(output_dir, showWarnings = FALSE)
+
+for (i in seq_along(clean_plots)) {
+  continent_name <- names(clean_plots)[i]
+  file_path <- file.path(output_dir, paste0(continent_name, ".svg"))
+  
+  # Force independent svglite device
+  svglite::svglite(file_path, width = 10, height = 10)
+  print(clean_plots[[i]])
+  dev.off()
+}
+```
