@@ -28,6 +28,9 @@ renv/library/
 output/
 figures/
 
+# Manuscript submission
+manuscript_submission/
+
 # Raw data
 data/
 
