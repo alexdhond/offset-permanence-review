@@ -149,6 +149,163 @@ ggsave(
 )
 ```
 
+# Plot 1b: Normalized Diverging Bar Plot (offset type x risk type)
+
+```{r}
+#| label: plot-1b-diverging-bar-risk-domain-category-type-normalized
+#| echo: false
+#| fig-width: 12
+#| fig-height: 10
+
+# Use the same data preparation as before
+risk_clean_normalized <- final_df %>%
+  filter(
+    !is.na(permanence_risk_domain),
+    !is.na(permanence_risk_category),
+    !is.na(permanence_risk_type),
+    !is.na(offset_category_general)
+  ) %>%
+  distinct(study_id, permanence_risk_domain, permanence_risk_category, permanence_risk_type,
+           offset_category_general) %>%
+  count(permanence_risk_domain, permanence_risk_category, permanence_risk_type, offset_category_general, name = "n") %>%
+  pivot_wider(names_from = offset_category_general, values_from = n, values_fill = 0) %>%
+  mutate(
+    total = biodiversity + carbon,
+    permanence_risk_domain = factor(permanence_risk_domain, levels = domain_order)
+  ) %>%
+  arrange(permanence_risk_domain, permanence_risk_category, desc(total)) %>%
+  mutate(risk_type_label = factor(permanence_risk_type, levels = rev(unique(permanence_risk_type))))
+
+# Order for plotting (same as before)
+risk_clean_normalized <- risk_clean_normalized %>%
+  arrange(permanence_risk_domain, permanence_risk_category, desc(total)) %>%
+  mutate(risk_type_label = paste0(permanence_risk_type)) %>%
+  mutate(risk_type_label = factor(risk_type_label, levels = rev(unique(risk_type_label))))
+
+# Calculate max values for normalization by offset category
+max_biodiversity <- max(risk_clean_normalized$biodiversity, na.rm = TRUE)
+max_carbon <- max(risk_clean_normalized$carbon, na.rm = TRUE)
+
+# Normalize by max values in each category
+risk_clean_normalized <- risk_clean_normalized %>%
+  mutate(
+    biodiversity_norm = biodiversity / max_biodiversity,
+    carbon_norm = carbon / max_carbon
+  )
+
+# Long format for diverging bars (normalized)
+risk_long_normalized <- risk_clean_normalized %>%
+  select(permanence_risk_domain, permanence_risk_category, risk_type_label, biodiversity_norm, carbon_norm) %>%
+  pivot_longer(cols = c(biodiversity_norm, carbon_norm), names_to = "offset_category", values_to = "n_norm") %>%
+  mutate(
+    n_norm = if_else(offset_category == "biodiversity_norm", -n_norm, n_norm),
+    offset_category = if_else(offset_category == "biodiversity_norm", "biodiversity", "carbon")
+  )
+
+# Line positions: category-level (same as before)
+risk_positions_normalized <- risk_clean_normalized %>%
+  mutate(row = as.numeric(factor(risk_type_label, levels = levels(risk_type_label)))) %>%
+  group_by(permanence_risk_domain, permanence_risk_category) %>%
+  summarise(max_row = max(row), .groups = "drop") %>%
+  arrange(permanence_risk_domain, permanence_risk_category) %>%
+  mutate(line_y = max_row + 0.5)
+
+# Line positions: domain-level (same as before)
+domain_breaks_normalized <- risk_clean_normalized %>%
+  mutate(row = as.numeric(factor(risk_type_label, levels = levels(risk_type_label)))) %>%
+  group_by(permanence_risk_domain) %>%
+  summarise(max_row = max(row), .groups = "drop") %>%
+  arrange(permanence_risk_domain) %>%
+  mutate(line_y = max_row + 0.5)
+
+# Create label dataframe with proper coordinates (normalized)
+risk_labels_normalized <- risk_long_normalized %>%
+  filter(n_norm != 0) %>%
+  mutate(
+    hjust_val = if_else(n_norm < 0, 1.5, -0.5),  # further offset from bars
+    y_val = n_norm,
+    x_val = risk_type_label
+  )
+
+# Plot (normalized version)
+ggplot(risk_long_normalized, aes(x = risk_type_label, y = n_norm, fill = offset_category)) +
+  geom_col(color = "black") +
+  geom_text(
+    data = risk_labels_normalized,
+    aes(x = x_val, y = y_val, label = round(abs(n_norm), 2), hjust = hjust_val),
+    size = 7,
+    color = "black",
+    inherit.aes = FALSE
+  ) +
+  geom_hline(yintercept = 0, color = "gray40") +
+  geom_segment(
+    data = risk_positions_normalized,
+    aes(x = line_y, xend = line_y, y = -Inf, yend = Inf),
+    inherit.aes = FALSE,
+    linetype = "dashed",
+    color = "gray70"
+  ) +
+  geom_segment(
+    data = domain_breaks_normalized,
+    aes(x = line_y, xend = line_y, y = -Inf, yend = Inf),
+    inherit.aes = FALSE,
+    linetype = "dashed",
+    color = "black",
+    linewidth = 1
+  ) +
+  scale_fill_brewer(palette = "Pastel1", name = "Offset Category") +
+  scale_y_continuous(
+    labels = function(x) abs(x), 
+    limits = c(-1, 1),
+    expand = expansion(mult = c(0.1, 0.15)))+  # adds space on both ends
+  coord_flip(clip = "off")+
+  labs(
+    title = "Risk Type by Offset Category (Normalized by Maximum)",
+    x = NULL,
+    y = "Normalized Number of Studies"
+  ) +
+theme_minimal(base_size = 20) +  # base font size
+  theme(
+    plot.title = element_blank(),
+    axis.text.y = element_text(size = 22),                # vertical tick labels (risk types)
+    axis.text.x = element_text(size = 22),                # horizontal axis tick labels (values)
+    axis.title.x = element_text(size = 24, margin = margin(t = 15)),  # x-axis (bottom, flipped)
+    axis.title.y = element_text(size = 24, margin = margin(r = 20)),  # y-axis (left, flipped)
+    legend.title = element_text(size = 24),
+    legend.text = element_text(size = 22),
+    legend.key.size = unit(1.5, "lines"),
+    legend.position = "top",
+    plot.margin = margin(t = 2, r = 5, b = 2, l = 5, unit = "cm")  # generous padding to avoid cutoffs
+  )
+
+```
+
+## Save Plot 1b (Normalized)
+
+```{r}
+ggsave(
+  filename = here("output", "fig-diverging-risk-bar-normalized.png"),
+  plot = last_plot(),
+  width = 20,
+  height = 24,
+  dpi = 600,
+  units = "in"
+)
+```
+
+## Save Plot 1b (Normalized SVG)
+
+```{r}
+ggsave(
+  filename = here("output", "fig-diverging-risk-bar-normalized.svg"),
+  plot = last_plot(),
+  width = 20,
+  height = 24,
+  dpi = 600,
+  units = "in"
+)
+```
+
 # Plot 2: Heatmap of Geographic Continent Trends
 
 ```{r}
@@ -1010,3 +1167,336 @@ for (i in seq_along(clean_plots)) {
   dev.off()
 }
 ```
+
+## Save Plot 7
+
+```{r}
+library(svglite)
+
+# ---- Export each plot as SVG ----
+output_dir <- "output"    # choose your folder
+dir.create(output_dir, showWarnings = FALSE)
+
+for (i in seq_along(clean_plots)) {
+  continent_name <- names(clean_plots)[i]
+  file_path <- file.path(output_dir, paste0(continent_name, ".svg"))
+  
+  # Force independent svglite device
+  svglite::svglite(file_path, width = 10, height = 10)
+  print(clean_plots[[i]])
+  dev.off()
+}
+```
+
+# Plot 3b: Temporal Permanence Trends by Top 2 Programs (Matching Colors)
+
+```{r}
+ library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(tibble)
+library(colorspace)
+
+# STEP 0: Filter and bin relevant data (same as original)
+final_df_binned <- final_df %>%
+  filter(
+    !is.na(study_id),
+    !is.na(permanence_risk_category),
+    !is.na(permanence_risk_domain),
+    !is.na(study_publication_year),
+    program_name %in% c("REDD+", "US CWA 404 Permitting", "US Mitigation Banking")
+  ) %>%
+  mutate(
+    period = cut(
+      study_publication_year,
+      breaks = c(1990, 1995, 2000, 2005, 2010, 2015, 2020, 2026),
+      labels = c("1990–1994", "1995–1999", "2000–2004", "2005–2009", "2010–2014", "2015–2019", "2020–2025"),
+      right = FALSE
+    ),
+    program_group = case_when(
+      program_name %in% c("US CWA 404 Permitting", "US Mitigation Banking") ~ "U.S. CWA Permitting and Mitigation Banking",
+      TRUE ~ program_name
+    )
+  )
+
+# STEP 1: Calculate fractional weights per study (same as original)
+study_risk_weights <- final_df_binned %>%
+  distinct(study_id, program_group, period, permanence_risk_category) %>%
+  group_by(study_id, program_group, period) %>%
+  mutate(weight = 1 / n()) %>%
+  ungroup()
+
+# STEP 2: Sum weights to get risk proportions (same as original)
+risk_shares <- study_risk_weights %>%
+  group_by(program_group, period, permanence_risk_category) %>%
+  summarise(weighted_sum = sum(weight), .groups = "drop")
+
+# STEP 3: Total studies per period/program (same as original)
+total_study_counts <- final_df_binned %>%
+  distinct(study_id, program_group, period) %>%
+  count(program_group, period, name = "total_studies")
+
+# STEP 4: Combine and calculate % (same as original)
+plot_df <- risk_shares %>%
+  left_join(total_study_counts, by = c("program_group", "period")) %>%
+  mutate(
+    percentage = (weighted_sum / total_studies) * 100,
+    label = ifelse(weighted_sum > 0, round(weighted_sum, 1), "")
+  )
+
+# STEP 5: Build CONSISTENT color palette (same as Plot 4)
+all_categories <- final_df %>%
+  filter(permanence_risk_category %in% unique(plot_df$permanence_risk_category)) %>%
+  distinct(permanence_risk_category, permanence_risk_domain)
+
+domain_base_colors <- c(
+  "physical" = "#59A14F",         # green
+  "non-physical" = "#4E79A7",     # blue
+  "methodological" = "#E15759"    # red
+)
+
+get_domain_palette <- function(base_color, n) {
+  colorRampPalette(c("#FFFFFF", base_color))(n + 1)[-1]
+}
+
+# Assign initial colors
+category_colors_df <- all_categories %>%
+  group_by(permanence_risk_domain) %>%
+  arrange(permanence_risk_category) %>%
+  mutate(color = get_domain_palette(domain_base_colors[permanence_risk_domain[1]], n())) %>%
+  ungroup()
+
+# STEP 6: Reorder by luminance (dark to light per domain) - SAME AS PLOT 4
+rgb_matrix <- hex2RGB(category_colors_df$color)@coords
+luminance_vals <- 0.299 * rgb_matrix[, 1] + 0.587 * rgb_matrix[, 2] + 0.114 * rgb_matrix[, 3]
+
+category_order_df <- category_colors_df %>%
+  mutate(luminance = luminance_vals) %>%
+  mutate(permanence_risk_domain = factor(permanence_risk_domain, levels = c("physical", "non-physical", "methodological"))) %>%
+  arrange(permanence_risk_domain, desc(luminance))
+
+# Final ordered levels and named color vector
+ordered_levels <- category_order_df$permanence_risk_category
+category_colors <- setNames(category_order_df$color, category_order_df$permanence_risk_category)
+
+# Apply to plot_df
+plot_df <- plot_df %>%
+  mutate(permanence_risk_category = factor(permanence_risk_category, levels = ordered_levels))
+
+# STEP 7: Final Plot with CONSISTENT colors
+ggplot(plot_df, aes(x = period, y = percentage, fill = permanence_risk_category)) +
+  geom_col(color = "black") +
+  geom_text(
+    data = total_study_counts,
+    aes(x = period, y = 110, label = total_studies),
+    inherit.aes = FALSE, size = 8
+  ) +
+  facet_wrap(~ program_group, ncol = 1) +
+  scale_fill_manual(values = category_colors) +
+  labs(
+    x = NULL,
+    y = "Percentage of Studies",
+    fill = "Risk Category"
+  ) +
+  theme_minimal(base_size = 20) +
+  theme(
+    axis.text.x = element_text(size = 20, angle = 45, hjust = 1),
+    legend.position = "top",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 20),
+    strip.text = element_text(size = 20),
+    panel.spacing = unit(2, "lines"),
+    plot.margin = margin(30, 10, 10, 10)
+  ) +
+  guides(fill = guide_legend(ncol = 2, byrow = TRUE))
+
+```
+
+## Save Plot 3b (Matching Colors)
+
+
+
+```{r}
+ggsave(
+  filename = "../output/fig-temporal-risks-program-matching-colors.png",  # Save to output folder
+  plot = last_plot(),                                 # Or specify your plot object
+  width = 12,                                          # Width in inches (adjust as needed)
+  height = 14,                                         # Height in inches (adjust as needed)
+  dpi = 600,                                          # High-resolution
+  units = "in"                                        # Use inches for journals
+)
+```
+
+## Save Plot 3b (Matching Colors SVG)
+
+
+
+```{r}
+ggsave(
+  filename = "../output/fig-temporal-risks-program-matching-colors.svg",  # Save as SVG
+  plot = last_plot(),
+  width = 15,
+  height = 16,
+  units = "in"  # Units still matter for defining physical size
+)
+```
+
+
+# Plot 6b: World with pie charts (Matching Colors)
+
+```{r}
+library(scatterpie)
+
+# Use the same continent data from Plot 4
+continent_df <- final_df %>%
+  filter(
+    !is.na(study_id),
+    !is.na(permanence_risk_category),
+    !is.na(permanence_risk_domain),
+    !is.na(continent)
+  ) %>%
+  distinct(study_id, continent, permanence_risk_category, permanence_risk_domain)
+
+# Assign fractional weight per study/continent (same as Plot 4)
+weighted_df <- continent_df %>%
+  group_by(study_id, continent) %>%
+  mutate(weight = 1 / n()) %>%
+  ungroup()
+
+# Aggregate to get study-weighted counts (same as Plot 4)
+continent_risk <- weighted_df %>%
+  group_by(continent, permanence_risk_category, permanence_risk_domain) %>%
+  summarise(weighted_sum = sum(weight), .groups = "drop")
+
+# Compute percentages per continent (same as Plot 4)
+continent_totals <- continent_risk %>%
+  group_by(continent) %>%
+  summarise(total_studies = sum(weighted_sum), .groups = "drop")
+
+plot_df <- continent_risk %>%
+  left_join(continent_totals, by = "continent") %>%
+  mutate(
+    percentage = (weighted_sum / total_studies) * 100,
+    label = ifelse(percentage >= 5, paste0(round(percentage, 1), "%"), "") # only label slices ≥5%
+  )
+
+# Use the SAME color palette as Plot 4 and Plot 3b
+plot_df <- plot_df %>%
+  mutate(permanence_risk_category = factor(permanence_risk_category, levels = ordered_levels))
+
+# --- 1. Define approximate continent coordinates (lon/lat) ------------------
+continent_coords <- data.frame(
+  continent = c("Africa", "Asia", "Europe", "North America", "South America", "Oceania"),
+  lon = c(25, 90, 10, -100, -60, 140),
+  lat = c(5, 40, 52, 40, -15, -30)
+)
+
+# --- 2. Project to Robinson CRS ---
+continent_sf <- st_as_sf(continent_coords, coords = c("lon", "lat"), crs = 4326)
+continent_robin <- st_transform(continent_sf, crs = robin_crs)
+continent_coords_robin <- st_coordinates(continent_robin)
+continent_coords <- cbind(continent_coords, continent_coords_robin)
+
+# --- 3. Create abbreviation + study count labels ---
+continent_abbrev <- c(
+  "Africa" = "AF",
+  "Asia" = "AS",
+  "Europe" = "EU",
+  "North America" = "NA",
+  "South America" = "SA",
+  "Oceania" = "OC"
+)
+
+# Join totals for labeling
+pie_df <- plot_df %>%
+  select(continent, permanence_risk_category, percentage, total_studies) %>%
+  tidyr::pivot_wider(names_from = permanence_risk_category, 
+                     values_from = percentage, values_fill = 0) %>%
+  left_join(continent_coords, by = "continent") %>%
+  mutate(
+    abbrev = continent_abbrev[continent],
+    label = paste0(abbrev, " (", round(total_studies), ")")
+  )
+
+# --- 4. Add manual label offsets -------------------------------------------
+pie_df <- pie_df %>%
+  mutate(
+    label_X = X,  # start at pie center
+    label_Y = Y
+  ) %>%
+  mutate(
+    label_X = case_when(
+      continent == "North America" ~ X,         # no horizontal move
+      continent == "South America" ~ X - 3e6,   # move left
+      continent == "Africa"        ~ X,         # no horizontal move
+      continent == "Europe"        ~ X - 3e6,   # move left
+      continent == "Oceania"       ~ X - 1e6,   # move left
+      continent == "Asia"          ~ X,         # no horizontal move
+      TRUE ~ X
+    ),
+    label_Y = case_when(
+      continent == "North America" ~ Y + 2e6,   # move up
+      continent == "South America" ~ Y,         # no vertical move
+      continent == "Africa"        ~ Y + 2e6,   # move up
+      continent == "Europe"        ~ Y,         # no vertical move
+      continent == "Oceania"       ~ Y - 2e6,   # move down
+      continent == "Asia"          ~ Y + 2e6,   # move up
+      TRUE ~ Y
+    )
+  )
+
+# --- 5. Plot map + pies with CONSISTENT colors -------------------------
+ggplot() +
+  # Base map
+  geom_sf(data = world_stadium, fill = "bisque1", color = NA) +
+  geom_sf(data = coast_stadium, color = "gray50", size = 0.2) +
+  geom_sf(data = stadium, fill = NA, color = "black", size = 0.5) +
+  
+  # Pies with CONSISTENT colors
+  geom_scatterpie(
+    data = pie_df,
+    aes(x = X, y = Y, r = 1.4e6),  # adjust radius
+    cols = levels(plot_df$permanence_risk_category),
+    color = "black", size = 0.3
+  ) +
+  scale_fill_manual(values = category_colors) +
+  
+  # Labels at adjusted positions
+  geom_text(
+    data = pie_df,
+    aes(x = label_X, y = label_Y, label = label),
+    size = 3.5,
+    fontface = "bold"
+  ) +
+  
+  coord_sf(crs = robin_crs) +
+  theme_void(base_size = 16) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 12),
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+    plot.margin = margin(t = 5, r = 1, b = 5, l = 1) # extra bottom space
+  ) +
+  guides(
+    fill = guide_legend(nrow = 5, ncol = 2, byrow = TRUE)
+  )
+
+```
+
+## Save Plot 6b (Matching Colors)
+
+
+
+```{r}
+
+output_file <- "output/world_map_pie_charts_leg_top-matching-colors.svg" 
+
+ggsave(
+  filename = output_file,
+  plot = last_plot(), 
+  width = 12, 
+  height = 6, 
+  dpi = 600, 
+  units = "in" 
+)
