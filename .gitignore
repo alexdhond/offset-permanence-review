@@ -1,0 +1,84 @@
+# Gitignore File
+
+# all word files
+*.docx
+
+# R and RStudio files
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+.RDataTmp
+.RDataTmp1
+.Renviron
+.cache/
+_output/
+_publish/
+
+# Quarto/knitr output directories
+*_files/
+*.html
+*.knit.md
+*.utf8.md
+
+# renv internal library
+renv/
+renv/library/
+
+# Outputs and figures
+output/
+figures/
+
+# Manuscript submission
+manuscript_submission/
+
+# Raw data (except the condensed database for publication)
+data/*
+!data/final/
+data/final/*
+!data/final/offset_perm_rev_condensed.csv
+
+# Cache files
+cache/
+
+# Writing files
+writing/
+
+# Presentation (powerpoint) files
+presentations/
+
+# CSV files (except tracked data)
+*.csv
+!data/final/offset_perm_rev_condensed.csv
+
+# Shiny app generated data
+shiny-app/data/
+
+# Shiny app renv
+shiny-app/renv/library/
+shiny-app/renv/staging/
+shiny-app/.RData
+shiny-app/.Rhistory
+shiny-app/.Rproj.user/
+
+/.quarto/
+_freeze/
+
+# AI coding assistant configs
+.agent/
+.agents/
+.windsurf/
+.claude/
+
+# Archived/legacy scripts (not part of published analysis)
+code/archive/
+
+# AI project instructions
+CLAUDE.md
+skills-lock.json
+
+# Design/planning documents
+docs/plans/
+
+# Shiny app deployment config
+shiny-app/rsconnect/

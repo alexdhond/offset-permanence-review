@@ -1,0 +1,775 @@
+---
+title: "Supplemental Information"
+subtitle: "Review of Permanence Risks to Biodiversity and Nature-based Carbon Offsets"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-summary: "Show code"
+---
+
+# Supplementary Information
+
+This document generates the figures for the Supplementary Information.
+
+------------------------------------------------------------------------
+
+## S2. Setup
+
+Load shared packages, data, and utility functions.
+
+```{r}
+#| label: setup
+#| include: false
+
+# Source centralized data loading script
+source(here::here("code", "helpers", "load_data.R"))
+
+# Source helper functions
+source(here::here("code", "helpers", "utils.R"))
+
+# Source centralized color palettes
+source(here::here("code", "helpers", "color_palettes.R"))
+```
+
+------------------------------------------------------------------------
+
+## S3. Supplementary Figures
+
+### Figure S1. Temporal Distribution of Studies {#fig-S1}
+
+**Figure S1.** Distribution of study publication years across the entire dataset (1990-2025). The concentration of publications in recent years reflects the relatively recent emergence of offset permanence as a research focus, particularly following major policy developments such as REDD+ implementation (post-2007) and US wetland mitigation reform (2008).
+
+```{r}
+#| label: fig-S1
+#| echo: false
+#| fig-width: 6.5
+#| fig-height: 4
+
+# Prepare temporal data
+year_summary <- final_df %>%
+    filter(!is.na(study_publication_year)) %>%
+    distinct(study_id, study_publication_year) %>%
+    count(study_publication_year, name = "n_studies") %>%
+    arrange(study_publication_year) %>%
+    mutate(study_publication_year = as.factor(study_publication_year))
+
+# Create simple bar chart
+ggplot(year_summary, aes(x = study_publication_year, y = n_studies)) +
+    geom_col(fill = "#5B8FA8", colour = "black") +
+    geom_text(aes(label = n_studies), vjust = -0.4, size = 3.5) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+    labs(
+        x = "Publication Year",
+        y = "Number of Studies"
+    ) +
+    theme_void(base_size = 10) +
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, margin = margin(t = 5)),
+        axis.text.y = element_text(margin = margin(r = 5)),
+        axis.title.x = element_text(margin = margin(t = 10)),
+        axis.title.y = element_text(angle = 90, margin = margin(r = 10))
+    )
+
+# Save plot
+ggsave(here("output", "figures", "supplementary", "fig-S1-temporal-overview.svg"), plot = last_plot(), width = 6.5, height = 4, dpi = 300, units = "in")
+```
+
+------------------------------------------------------------------------
+
+### Figure S2. Evidence Type by Offset Category {#fig-S2}
+
+**Figure S2.** Distribution of study evidence types across biodiversity and carbon offset categories. Direct empirical studies form the largest group, followed by reviews and discussion-based work. The evidence base for carbon offsets relies more heavily on modelling studies compared to biodiversity offsets.
+
+```{r}
+#| label: fig-S2
+#| echo: false
+
+# Prepare data for plot
+evidence_offset_plot <- final_df %>%
+  filter(
+    !is.na(study_evidence_type), study_evidence_type != "",
+    !is.na(offset_category_general), offset_category_general != ""
+  ) %>%
+  group_by(study_evidence_type, offset_category_general) %>%
+  summarise(n_studies = n_distinct(study_id), .groups = "drop")
+
+# Plot
+ggplot(evidence_offset_plot,
+       aes(x = fct_reorder(study_evidence_type, n_studies, .fun = sum),
+           y = n_studies, fill = offset_category_general)) +
+  geom_col(position = "dodge", color = "black") +
+  geom_text(aes(label = n_studies),
+            position = position_dodge(width = 0.9),
+            hjust = -0.4, size = 4, color = "black") +
+  scale_fill_manual(values = offset_colors) +
+  labs(
+    x = "Evidence Type",
+    y = "Number of Studies",
+    fill = "Offset Category"
+  ) +
+  coord_flip(clip = "off") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  theme_void(base_size = 10) +
+  theme(
+    axis.text.x = element_text(margin = margin(t = 5)),
+    axis.text.y = element_text(margin = margin(r = 5)),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(angle = 90, margin = margin(r = 10)),
+    legend.position = "top",
+    legend.text = element_text(),
+    legend.title = element_text(),
+    plot.margin = margin(1, 2, 1, 1, unit = "lines")
+  )
+
+# Save plot
+ggsave(
+  here("output", "figures", "supplementary", "fig-S2-evidence-by-offset.svg"),
+  plot = last_plot(),
+  width = 6.5,
+  height = 4,
+  dpi = 300,
+  units = "in"
+)
+```
+
+------------------------------------------------------------------------
+
+### Figure S3. Continental Distribution by Offset Category {#fig-S3}
+
+**Figure S3.** Geographic distribution of studies across continents, broken down by biodiversity and carbon offset categories. North America dominates the biodiversity offset literature (reflecting the extensive US wetland mitigation system), while carbon offset studies are more evenly distributed across continents with tropical forest coverage.
+
+```{r}
+#| label: fig-S3
+#| echo: false
+
+# Unique study per continent
+continent_offset_plot <- final_df %>%
+  filter(!is.na(study_id), !is.na(continent), !is.na(offset_category_general)) %>%
+  distinct(study_id, continent, offset_category_general) %>%
+  count(continent, offset_category_general, name = "n_studies")
+
+continent_summary_clean <- continent_offset_plot %>%
+  pivot_wider(names_from = offset_category_general, values_from = n_studies, values_fill = 0) %>%
+  mutate(Total = coalesce(biodiversity, 0) + coalesce(carbon, 0))
+
+# plot
+make_bar_plot(
+  continent_offset_plot,
+  rlang::expr(fct_reorder(continent, n_studies, .fun = sum)),
+  rlang::expr(n_studies),
+  rlang::expr(offset_category_general),
+  "Continent",
+  "Number of Studies",
+  "Offset Category",
+  flip = TRUE,
+  fill_colors = offset_colors
+)
+
+# Save plot
+ggsave(here("output", "figures", "supplementary", "fig-S3-continent-by-offset.svg"), plot = last_plot(), width = 6.5, height = 4, dpi = 300, units = "in")
+```
+
+------------------------------------------------------------------------
+
+### Figure S4. Ecosystem Types by Offset Category {#fig-S4}
+
+**Figure S4.** Distribution of broad ecosystem types across biodiversity and carbon offset categories. Forest ecosystems dominate the carbon offset literature (reflecting REDD+ and forestry carbon programs), while biodiversity offsets show a more diverse ecosystem representation including significant wetland focus.
+
+```{r}
+#| label: fig-S4
+#| echo: false
+
+# Prepare data for the bar plot
+ecosystem_offset_plot <- final_df %>%
+    filter(
+        !is.na(study_title),
+        !is.na(ecosystem_broad_type),
+        !is.na(offset_category_general)
+    ) %>%
+    distinct(study_title, ecosystem_broad_type, offset_category_general) %>%
+    count(ecosystem_broad_type, offset_category_general, name = "n_studies")
+
+# Plot using the helper function
+make_bar_plot(
+    ecosystem_offset_plot,
+    rlang::expr(fct_reorder(ecosystem_broad_type, n_studies, .fun = sum)),
+    rlang::expr(n_studies),
+    rlang::expr(offset_category_general),
+    x_lab = "Ecosystem Type",
+    y_lab = "Number of Studies",
+    fill_lab = "Offset Category",
+    flip = TRUE,
+    fill_colors = offset_colors
+)
+
+# Save plot
+ggsave(
+  here("output", "figures", "supplementary", "fig-S4-ecosystem-by-offset.svg"),
+  plot = last_plot(),
+  width = 6.5,
+  height = 4,
+  dpi = 300,
+  units = "in"
+)
+```
+
+------------------------------------------------------------------------
+
+### Figure S5. Project Types by Offset Category {#fig-S5}
+
+**Figure S5.** Distribution of ecological intervention types across biodiversity and carbon offset categories. Protection and restoration are the dominant approaches, with notable differences in emphasis between offset types.
+
+```{r}
+#| label: fig-S5
+#| echo: false
+
+# Prepare plot data (study counted once per action-category pair)
+ecoact_plot_data <- final_df %>%
+    filter(!is.na(study_id), !is.na(project_broad_type), !is.na(offset_category_general)) %>%
+    distinct(study_id, project_broad_type, offset_category_general) %>%
+    count(project_broad_type, offset_category_general, name = "n_studies")
+
+# Find max value for y axis
+max_n <- max(ecoact_plot_data$n_studies)
+
+# Plot using the helper function, then manually set x (since coord_flip) axis limit
+make_bar_plot(
+    ecoact_plot_data,
+    rlang::expr(fct_reorder(project_broad_type, n_studies, .fun = sum)),
+    rlang::expr(n_studies),
+    rlang::expr(offset_category_general),
+    x_lab = "Project Type",
+    y_lab = "Number of Studies",
+    fill_lab = "Offset Category",
+    flip = TRUE,
+    fill_colors = offset_colors
+) +
+    scale_x_discrete(expand = expansion(mult = c(0, 0.15))) +
+    scale_y_continuous(limits = c(0, max_n + 2))
+
+# Save plot
+ggsave(
+  here("output", "figures", "supplementary", "fig-S5-project-type-by-offset.svg"),
+  plot = last_plot(),
+  width = 6.5,
+  height = 4,
+  dpi = 300,
+  units = "in"
+)
+```
+
+------------------------------------------------------------------------
+
+### Figure S6. Top Programs by Offset Category {#fig-S6}
+
+**Figure S6.** The 10 most frequently studied offset programs, showing breakdown by biodiversity and carbon offset categories. REDD+ and US wetland mitigation programs dominate the literature, reflecting both their scale and the availability of evaluative research.
+
+```{r}
+#| label: fig-S6
+#| echo: false
+
+# Calculate total studies per program across both categories first
+top_programs_total <- final_df %>%
+  filter(!is.na(study_id), !is.na(program_name), !is.na(offset_category_general)) %>%
+  distinct(study_id, program_name) %>%
+  count(program_name, name = "total_n") %>%
+  arrange(desc(total_n)) %>%
+  slice_max(total_n, n = 10)
+
+# Now get breakdown by offset category for those top 10 programs
+top10_programs_clean <- final_df %>%
+  filter(!is.na(study_id), !is.na(program_name), !is.na(offset_category_general)) %>%
+  semi_join(top_programs_total, by = "program_name") %>%
+  distinct(study_id, program_name, offset_category_general) %>%
+  count(program_name, offset_category_general, name = "n_studies") %>%
+  mutate(program_name = fct_reorder(program_name, n_studies, .fun = sum))
+
+# Step 1: Total study counts per program
+program_totals <- top10_programs_clean %>%
+  group_by(program_name) %>%
+  summarise(total_studies = sum(n_studies), .groups = "drop")
+
+# Step 2: Plot
+ggplot(top10_programs_clean,
+       aes(x = program_name, y = n_studies, fill = offset_category_general)) +
+  geom_col(position = "stack", color = "black") +
+  geom_text(data = program_totals,
+            aes(x = program_name, y = total_studies, label = total_studies),
+            hjust = -0.2, size = 4, inherit.aes = FALSE) +
+  scale_fill_manual(values = offset_colors) +
+  labs(
+    x = "Program",
+    y = "Number of Studies",
+    fill = "Offset Category"
+  ) +
+  coord_flip(clip = "off") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  theme_void(base_size = 10) +
+  theme(
+    axis.text.x = element_text(margin = margin(t = 5)),
+    axis.text.y = element_text(margin = margin(r = 5)),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(angle = 90, margin = margin(r = 10)),
+    legend.position = "top",
+    legend.text = element_text(),
+    legend.title = element_text(),
+    plot.margin = margin(1, 2, 1, 1, unit = "lines")
+  )
+
+# Save the plot
+ggsave(
+  here("output", "figures", "supplementary", "fig-S6-programs-by-offset.svg"),
+  plot = last_plot(),
+  width = 6.5,
+  height = 4,
+  dpi = 300,
+  units = "in"
+)
+```
+
+------------------------------------------------------------------------
+
+### Figure S7. Top Policies by Offset Category {#fig-S7}
+
+**Figure S7.** The most frequently studied offset policies, showing breakdown by biodiversity and carbon offset categories. US Clean Water Act Section 404 and UNFCCC REDD+ represent the dominant policy frameworks examined.
+
+```{r}
+#| label: fig-S7
+#| echo: false
+
+# Prepare data for top 10 offset policies by number of studies
+policy_offset_data <- final_df %>%
+  filter(!is.na(study_title), !is.na(policy_name), !is.na(offset_category_general)) %>%
+  distinct(study_id, policy_name, offset_category_general) %>%
+  count(policy_name, offset_category_general, name = "n_studies") %>%
+  group_by(offset_category_general) %>%
+  slice_max(n_studies, n = 5) %>%
+  ungroup() %>%
+  distinct(policy_name, .keep_all = TRUE) %>%
+  rename(Total = n_studies)
+
+# Prepare data for plotting
+policy_plot_clean <- policy_offset_data %>%
+  mutate(
+    policy_name = fct_reorder(policy_name, Total),
+    offset_category = offset_category_general
+  )
+
+# Generate bar plot for top 10 offset policies
+policy_plot <- ggplot(policy_plot_clean,
+       aes(x = policy_name, y = Total, fill = offset_category)) +
+  geom_col(color = "black") +
+  geom_text(aes(label = Total),
+            hjust = -0.3, size = 4, color = "black") +
+  scale_fill_manual(values = offset_colors) +
+  labs(
+    x = "Policy",
+    y = "Number of Studies",
+    fill = "Offset Category"
+  ) +
+  coord_flip(clip = "off") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  theme_void(base_size = 10) +
+  theme(
+    axis.text.x = element_text(margin = margin(t = 5)),
+    axis.text.y = element_text(margin = margin(r = 5)),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(angle = 90, margin = margin(r = 10)),
+    legend.position = "top",
+    legend.text = element_text(),
+    legend.title = element_text()
+  )
+
+# Print plot
+policy_plot
+
+# Save plot as PNG
+ggsave(
+  here("output", "figures", "supplementary", "fig-S7-policies-by-offset.svg"),
+  plot = policy_plot,
+  width = 6.5,
+  height = 4,
+  dpi = 300,
+  units = "in"
+)
+```
+
+------------------------------------------------------------------------
+
+### Figure S8. Distribution of Risks per Study {#fig-S8}
+
+**Figure S8.** Frequency distribution of unique permanence risk types reported within individual studies. Most studies reported 1-3 distinct risk types, though a substantial number identified 4 or more, reflecting the multi-faceted nature of permanence challenges.
+
+```{r}
+#| label: fig-S8
+#| echo: false
+
+# Count unique risk types per study
+risk_counts <- final_df %>%
+  filter(!is.na(permanence_risk_type)) %>%
+  group_by(study_id) %>%
+  summarise(n_unique_risks = n_distinct(permanence_risk_type), .groups = "drop")
+
+# Summarize: how many studies cited 1, 2, 3, ... risk types
+risk_summary <- risk_counts %>%
+  count(n_unique_risks, name = "n_studies")
+
+# Plot
+ggplot(risk_summary, aes(x = factor(n_unique_risks), y = n_studies)) +
+  geom_col(fill = domain_colors["non-physical"]) +
+  geom_text(aes(label = n_studies), vjust = -0.4) +
+  labs(
+    x = "Number of Distinct Risk Types Cited",
+    y = "Number of Studies"
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  theme_void(base_size = 10) +
+  theme(
+    axis.text.x = element_text(margin = margin(t = 5)),
+    axis.text.y = element_text(margin = margin(r = 5)),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(angle = 90, margin = margin(r = 10))
+  )
+
+# Save plot as PNG
+ggsave(
+  here("output", "figures", "supplementary", "fig-S8-risks-per-study.svg"),
+  plot = last_plot(),
+  width = 6.5,
+  height = 4,
+  dpi = 300,
+  units = "in"
+)
+```
+
+------------------------------------------------------------------------
+
+### Figure S9. Temporal Trends in Risk Domains {#fig-S9}
+
+**Figure S9.** Temporal distribution of permanence risk domains (physical, non-physical, methodological) across 5-year publication periods. Non-physical risks have consistently dominated across all time periods, while physical and methodological risks show more variable patterns.
+
+```{r}
+#| label: fig-S9
+#| echo: false
+
+# Step 1: Filter and bin data by 5-year intervals
+final_df_binned <- final_df %>%
+  filter(!is.na(permanence_risk_domain), !is.na(study_publication_year)) %>%
+  mutate(
+    period = cut(
+      study_publication_year,
+      breaks = c(1990, 1995, 2000, 2005, 2010, 2015, 2020, 2026),
+      labels = c("1990-1994", "1995-1999", "2000-2004", "2005-2009", "2010-2014", "2015-2019", "2020-2025"),
+      right = FALSE
+    )
+  )
+
+# Step 2: Summarize the number of distinct studies per period x permanence risk domain
+domain_trends_binned <- final_df_binned %>%
+  distinct(study_id, period, permanence_risk_domain) %>%
+  count(period, permanence_risk_domain, name = "n_studies") %>%
+  complete(period, permanence_risk_domain, fill = list(n_studies = 0)) %>%
+  filter(!is.na(period))
+
+# Step 3: Plot with standardized domain colors
+ggplot(domain_trends_binned, aes(x = period, y = n_studies, fill = permanence_risk_domain)) +
+  geom_col(position = "dodge", color = "black") +
+  scale_fill_manual(values = domain_colors, name = "Risk Domain") +
+  labs(
+    x = "Publication Period",
+    y = "Number of Studies"
+  ) +
+  theme_void(base_size = 10) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, margin = margin(t = 5)),
+    axis.text.y = element_text(margin = margin(r = 5)),
+    axis.title.x = element_text(margin = margin(t = 20)),
+    axis.title.y = element_text(angle = 90, margin = margin(r = 10)),
+    legend.position = "top",
+    legend.text = element_text(),
+    legend.title = element_text()
+  )
+
+# Save plot as PNG
+ggsave(
+  here("output", "figures", "supplementary", "fig-S9-temporal-risk-domains.svg"),
+  plot = last_plot(),
+  width = 6.5,
+  height = 4,
+  dpi = 300,
+  units = "in"
+)
+```
+
+------------------------------------------------------------------------
+
+### Figure S10. Risk Pair Co-occurrence by Offset Type {#fig-S10}
+
+**Figure S10.** Heatmap showing the frequency of top co-occurring permanence risk type pairs by offset category. The differential patterns between biodiversity and carbon offsets reflect the distinct risk profiles documented in the main analysis.
+
+```{r}
+#| label: fig-S10
+#| echo: false
+#| fig-width: 6.5
+#| fig-height: 9
+
+# Helper function to generate pairwise combinations
+get_risk_pairs <- function(risks) {
+  if (length(risks) < 2) return(NULL)
+  pairs <- combn(sort(risks), 2)
+  apply(pairs, 2, function(x) paste(x, collapse = " + "))
+}
+
+# Prepare data for heatmap
+pair_by_offset <- final_df %>%
+  filter(!is.na(permanence_risk_type), !is.na(offset_category_general)) %>%
+  distinct(study_id, offset_category_general, permanence_risk_type) %>%
+  group_by(study_id, offset_category_general) %>%
+  summarise(risk_pair = list(get_risk_pairs(permanence_risk_type)), .groups = "drop") %>%
+  unnest(risk_pair) %>%
+  filter(!is.na(risk_pair)) %>%
+  count(offset_category_general, risk_pair, name = "n")
+
+# Get top 10 pairs for EACH offset type separately
+top_pairs_bio <- pair_by_offset %>%
+  filter(offset_category_general == "biodiversity") %>%
+  slice_max(n, n = 10, with_ties = FALSE)
+
+top_pairs_carbon <- pair_by_offset %>%
+  filter(offset_category_general == "carbon") %>%
+  slice_max(n, n = 10, with_ties = FALSE)
+
+# Combine and get unique pairs
+all_top_pairs <- unique(c(top_pairs_bio$risk_pair, top_pairs_carbon$risk_pair))
+
+# Filter to only top pairs and complete the grid
+pair_heat <- pair_by_offset %>%
+  filter(risk_pair %in% all_top_pairs) %>%
+  complete(offset_category_general, risk_pair, fill = list(n = 0)) %>%
+  group_by(risk_pair) %>%
+  mutate(total_n = sum(n)) %>%
+  ungroup()
+
+# Plot
+ggplot(pair_heat, aes(x = offset_category_general, y = reorder(risk_pair, total_n), fill = n)) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  geom_text(aes(label = n), color = "black", size = 4) +
+  scale_fill_viridis_c(
+    option = "mako",
+    trans = "sqrt",
+    begin = 0.1,
+    end = 0.9,
+    name = "Study\nCount"
+  ) +
+  labs(
+    x = "Offset Category",
+    y = NULL
+  ) +
+  theme_void(base_size = 10) +
+  theme(
+    axis.text.x = element_text(size = 12, margin = margin(t = 5)),
+    axis.text.y = element_text(size = 10, lineheight = 0.9, margin = margin(r = 5)),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(angle = 90, margin = margin(r = 10)),
+    legend.position = "right",
+    legend.text = element_text(),
+    legend.title = element_text()
+  )
+
+# Save plot as PNG
+ggsave(
+  here("output", "figures", "supplementary", "fig-S10-risk-pair-cooccurrence.svg"),
+  plot = last_plot(),
+  width = 6.5,
+  height = 9,
+  dpi = 300,
+  units = "in"
+)
+```
+
+------------------------------------------------------------------------
+
+### Figure S11. Top 5 Permanence Risks Over Time {#fig-S11}
+
+**Figure S11.** Temporal trends in the five most frequently cited permanence risk types across 5-year publication periods (1990–2025). These risks represent the most commonly identified threats to offset permanence in the literature.
+
+```{r}
+#| label: fig-S11
+#| echo: false
+#| fig-width: 6.5
+#| fig-height: 4
+
+# Step 1: Identify top 5 most frequently mentioned risk types overall
+top5_risks <- final_df |>
+    filter(!is.na(permanence_risk_type)) |>
+    distinct(study_id, permanence_risk_type) |>
+    count(permanence_risk_type, sort = TRUE) |>
+    slice_max(n, n = 5) |>
+    pull(permanence_risk_type)
+
+# Step 2: Create yearly trend data for top risks
+risk_time_top5 <- final_df |>
+    filter(permanence_risk_type %in% top5_risks, !is.na(study_publication_year)) |>
+    distinct(study_id, study_publication_year, permanence_risk_type) |>
+    count(study_publication_year, permanence_risk_type, name = "n_studies") |>
+    complete(study_publication_year, permanence_risk_type, fill = list(n_studies = 0))
+
+# Step 3: Bin publication years into 5-year intervals
+risk_top5_binned <- risk_time_top5 |>
+    mutate(period = cut(
+        study_publication_year,
+        breaks = c(1990, 1995, 2000, 2005, 2010, 2015, 2020, 2026),
+        labels = c("1990-1994", "1995-1999", "2000-2004", "2005-2009", "2010-2014", "2015-2019", "2020-2025"),
+        right = FALSE
+    )) |>
+    group_by(period, permanence_risk_type) |>
+    summarise(n_studies = sum(n_studies), .groups = "drop") |>
+    filter(!is.na(period))
+
+# Step 4: Build domain-based colour mapping for risk types
+top5_domain_map <- final_df |>
+    filter(permanence_risk_type %in% top5_risks) |>
+    distinct(permanence_risk_type, permanence_risk_domain) |>
+    arrange(permanence_risk_domain, permanence_risk_type)
+
+top5_type_colors <- top5_domain_map |>
+    group_by(permanence_risk_domain) |>
+    mutate(color = get_domain_palette(domain_colors[unique(permanence_risk_domain)], n())) |>
+    ungroup() |>
+    select(permanence_risk_type, color) |>
+    tibble::deframe()
+
+# Step 5: Plot
+ggplot(risk_top5_binned, aes(x = period, y = n_studies, fill = permanence_risk_type)) +
+    geom_col(position = "dodge", colour = "black") +
+    scale_fill_manual(values = top5_type_colors, name = "Risk Type") +
+    labs(
+        x = "Publication Period",
+        y = "Number of Studies"
+    ) +
+    theme_void(base_size = 10) +
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, margin = margin(t = 5)),
+        axis.text.y = element_text(margin = margin(r = 5)),
+        axis.title.x = element_text(margin = margin(t = 10)),
+        axis.title.y = element_text(angle = 90, margin = margin(r = 10)),
+        legend.position = "right",
+        legend.text = element_text(size = 9),
+        legend.title = element_text(size = 11)
+    )
+
+# Save plot
+ggsave(
+    here("output", "figures", "supplementary", "fig-S11-top5-risks-over-time.svg"),
+    plot = last_plot(), width = 6.5, height = 4, dpi = 300, units = "in"
+)
+```
+
+------------------------------------------------------------------------
+
+### Figure S12. Top 10 Permanence Risks Over Time {#fig-S12}
+
+**Figure S12.** Temporal trends in the ten most frequently cited permanence risk types across 5-year publication periods (1990–2025). The broader set of risks reveals secondary but important threats whose prevalence has shifted over time.
+
+```{r}
+#| label: fig-S12
+#| echo: false
+#| fig-width: 6.5
+#| fig-height: 9
+
+# Step 1: Identify top 10 most frequently mentioned risk types overall
+top10_risks <- final_df |>
+    filter(!is.na(permanence_risk_type)) |>
+    distinct(study_id, permanence_risk_type) |>
+    count(permanence_risk_type, sort = TRUE) |>
+    slice_max(n, n = 10) |>
+    pull(permanence_risk_type)
+
+# Step 2: Create yearly trend data for those risks
+risk_time_top10 <- final_df |>
+    filter(permanence_risk_type %in% top10_risks, !is.na(study_publication_year)) |>
+    distinct(study_id, study_publication_year, permanence_risk_type) |>
+    count(study_publication_year, permanence_risk_type, name = "n_studies") |>
+    complete(study_publication_year, permanence_risk_type, fill = list(n_studies = 0))
+
+# Step 3: Bin into 5-year intervals
+risk_top10_binned <- risk_time_top10 |>
+    mutate(period = cut(
+        study_publication_year,
+        breaks = c(1990, 1995, 2000, 2005, 2010, 2015, 2020, 2026),
+        labels = c("1990-1994", "1995-1999", "2000-2004", "2005-2009", "2010-2014", "2015-2019", "2020-2025"),
+        right = FALSE
+    )) |>
+    group_by(period, permanence_risk_type) |>
+    summarise(n_studies = sum(n_studies), .groups = "drop") |>
+    filter(!is.na(period))
+
+# Step 4: Build domain-based colour mapping for risk types
+top10_domain_map <- final_df |>
+    filter(permanence_risk_type %in% top10_risks) |>
+    distinct(permanence_risk_type, permanence_risk_domain) |>
+    arrange(permanence_risk_domain, permanence_risk_type)
+
+top10_type_colors <- top10_domain_map |>
+    group_by(permanence_risk_domain) |>
+    mutate(color = get_domain_palette(domain_colors[unique(permanence_risk_domain)], n())) |>
+    ungroup() |>
+    select(permanence_risk_type, color) |>
+    tibble::deframe()
+
+# Step 5: Plot
+ggplot(risk_top10_binned, aes(x = period, y = n_studies, fill = permanence_risk_type)) +
+    geom_col(position = "dodge", colour = "black") +
+    scale_fill_manual(values = top10_type_colors, name = "Risk Type") +
+    labs(
+        x = "Publication Period",
+        y = "Number of Studies"
+    ) +
+    theme_void(base_size = 10) +
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, margin = margin(t = 5)),
+        axis.text.y = element_text(margin = margin(r = 5)),
+        axis.title.x = element_text(margin = margin(t = 10)),
+        axis.title.y = element_text(angle = 90, margin = margin(r = 10)),
+        legend.position = "right",
+        legend.text = element_text(size = 9),
+        legend.title = element_text(size = 11)
+    )
+
+# Save plot
+ggsave(
+    here("output", "figures", "supplementary", "fig-S12-top10-risks-over-time.svg"),
+    plot = last_plot(), width = 6.5, height = 9, dpi = 300, units = "in"
+)
+```
+
+------------------------------------------------------------------------
+
+## S4. Figure Summary
+
+| Figure | Description |
+|--------|-------------|
+| Figure S1 | Temporal distribution of studies (1990-2025) |
+| Figure S2 | Evidence types by offset category |
+| Figure S3 | Continental distribution by offset category |
+| Figure S4 | Ecosystem types by offset category |
+| Figure S5 | Project types by offset category |
+| Figure S6 | Top 10 programs by offset category |
+| Figure S7 | Top policies by offset category |
+| Figure S8 | Distribution of risk types per study |
+| Figure S9 | Temporal trends in risk domains |
+| Figure S10 | Risk pair co-occurrence by offset type |
+| Figure S11 | Top 5 permanence risks over time |
+| Figure S12 | Top 10 permanence risks over time |
+
+: Summary of Supplementary Figures {#tbl-supp-figs}
+
+------------------------------------------------------------------------
+
+::: {.callout-note}
+## Cross-referencing Figures
+
+All supplementary figures can be referenced in the main manuscript using standard figure notation (Figure S1, Figure S2, etc.) or Quarto's cross-reference syntax (@fig-S1, @fig-S2, etc.).
+:::

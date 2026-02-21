@@ -1,0 +1,74 @@
+project:
+  type: default
+
+# Author information (update with your details)
+author:
+  name: "Alexander Dhond"
+  email: "alexander.dhond@biology.ox.ac.uk"
+  orcid: "0000-0002-6436-4466"
+  affiliation: "Department of Biology, University of Oxford"
+
+# Auto-generate date on each render
+date: today
+date-format: "D MMMM YYYY"
+
+format:
+  html:
+    theme: flatly
+    toc: true
+    toc-location: left
+    toc-depth: 3
+
+    # Code display
+    code-fold: true
+    code-tools:
+      source: true
+      toggle: true
+    code-copy: true
+    code-background: true
+    code-overflow: wrap
+
+    # Academic / Research Features
+    title-block-banner: true      # Default banner (can be overridden per file)
+    lightbox: true                # Click-to-zoom figures
+    link-citations: true          # Clickable citations
+    smooth-scroll: true           # Smooth TOC navigation
+
+    # Standalone HTML (no _files folder)
+    embed-resources: true
+
+    # Numbering
+    number-sections: true
+
+    # Figure and table formatting
+    fig-align: center
+    fig-cap-location: bottom
+    tbl-cap-location: top
+
+execute:
+  echo: true
+  warning: false
+  message: false
+  freeze: auto
+
+# Figure defaults (apply to both R and Python)
+fig-width: 7
+fig-height: 5
+fig-dpi: 150
+fig-format: png
+
+# R (knitr) settings
+knitr:
+  opts_chunk:
+    comment: "#>"
+    R.options:
+      width: 80
+
+# Cross-reference labels
+crossref:
+  fig-title: "Figure"
+  tbl-title: "Table"
+
+# Bibliography
+bibliography: references.bib
+csl: https://www.zotero.org/styles/ecology

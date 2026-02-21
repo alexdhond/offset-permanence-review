@@ -1,0 +1,1343 @@
+---
+title: "Publication Figures"
+subtitle: "Manuscript Figures for Offset Permanence Review"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-summary: "Show code"
+---
+
+# Overview
+
+This document generates all publication-ready figures for the manuscript. All figures use consistent color palettes defined in `code/helpers/color_palettes.R` and are exported as SVG files.
+
+------------------------------------------------------------------------
+
+## Setup
+
+Load required packages, data, and centralized color palettes.
+
+```{r}
+#| label: setup
+#| include: false
+
+# Source centralized data loading script
+source(here::here("code", "helpers", "load_data.R"))
+
+# Source helper functions
+source(here::here("code", "helpers", "utils.R"))
+
+# Source centralized color palettes
+source(here::here("code", "helpers", "color_palettes.R"))
+
+# Additional packages for specialized figures
+library(patchwork)
+library(scatterpie)
+library(svglite)
+library(scales)
+```
+
+------------------------------------------------------------------------
+
+# Main Text Figures
+
+## Figure 1: Map of Selected Case Studies
+
+This figure is generated manually in PowerPoint and is not generated in this file. It is a map of the world with the number of studies per country.
+
+## Figure 2: Study Characteristics Overview
+
+This figure is a multi-panel figure summarizing key dataset trends across A) ecosystem type, B) evidence type, C) country, D) program, and E) through time based on publication-year frequency. We generate the individual plots below and combine later.
+
+### Panel A: Ecosystem Types
+
+This panel shows the split of ecosystem types in the dataset. 
+
+```{r}
+#| label: summary-panel-a
+#| echo: true
+#| fig-width: 10
+#| fig-height: 5
+
+# Use broad ecosystem types (7 total categories)
+ecosystem_df <- final_df |>
+
+  # Filter out missing values
+  filter(!is.na(ecosystem_broad_type), !is.na(offset_category_general)) |>
+  
+  # Remove duplicates
+  distinct(study_id, ecosystem_broad_type, offset_category_general) |>
+  
+  # Count number of studies per ecosystem type
+  count(ecosystem_broad_type, offset_category_general, name = "n") |>
+  
+  # Pivot to wide format
+  pivot_wider(names_from = offset_category_general, values_from = n, values_fill = 0) |>
+  
+  # Calculate total number of studies per ecosystem type
+  mutate(total = biodiversity + carbon) |>
+
+  # Keep top 5 ecosystem types
+  slice_max(total, n = 5, with_ties = FALSE) |>
+  
+  # Arrange in descending order
+  arrange(desc(total)) |>
+  
+  # Convert ecosystem type to factor
+  mutate(ecosystem_broad_type = factor(ecosystem_broad_type, levels = rev(ecosystem_broad_type)))
+
+# Keep long format, filter out zeros so remaining bar takes full width
+ecosystem_long <- ecosystem_df |>
+  pivot_longer(cols = c(biodiversity, carbon), names_to = "offset_type", values_to = "n") |>
+  filter(n > 0)  # Remove zeros so other category takes full width
+
+# Create position object for consistent use
+pos_eco <- position_dodge2(width = 0.9, padding = 0, preserve = "single")
+
+# Grouped bars
+panel_ecosystems <- ggplot(ecosystem_long, aes(x = ecosystem_broad_type, y = n, fill = offset_type)) +
+  geom_col(position = pos_eco, color = "black", linewidth = 0.3, width = 0.9) +
+  geom_text(
+    aes(label = n),
+    position = pos_eco,
+    hjust = -0.3,
+    size = 8
+  ) +
+  scale_fill_manual(values = offset_colors, labels = c("Biodiversity", "Carbon")) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = NULL,
+    fill = NULL,
+    tag = "A"
+  ) +
+  theme_minimal(base_size = 25) +
+  theme(
+    legend.position = "none",
+    panel.grid = element_blank(),
+    plot.tag = element_text(face = "bold", size = 29),
+    axis.text.x = element_blank()
+  )
+
+print(panel_ecosystems)
+```
+
+### Panel B: Evidence Type
+
+The next panel shows the split of evidence types in the dataset.
+
+```{r}
+#| label: summary-panel-b-evidence
+#| echo: true
+#| fig-width: 10
+#| fig-height: 5
+
+# Clean up evidence type names
+evidence_name_map <- c(
+  "direct empirical" = "Direct Empirical Studies",
+  "legal and policy" = "Conceptual, Legal & Policy Analyses",
+  "review and discussion" = "Reviews & Discussions",
+  "modeling" = "Modeling Studies"
+)
+
+# Evidence type data with cleaned names
+evidence_df <- final_df |>
+
+  # Filter out missing values
+  filter(!is.na(study_evidence_type), !is.na(offset_category_general)) |>
+  
+  # Remove duplicates
+  distinct(study_id, study_evidence_type, offset_category_general) |>
+  
+  # Map evidence type names
+  mutate(study_evidence_type = evidence_name_map[study_evidence_type]) |>
+  
+  # Count number of studies per evidence type
+  count(study_evidence_type, offset_category_general, name = "n") |>
+  
+  # Pivot to wide format
+  pivot_wider(names_from = offset_category_general, values_from = n, values_fill = 0) |>
+  
+  # Calculate total number of studies per evidence type
+  mutate(total = biodiversity + carbon) |>
+
+  # Arrange in descending order
+  arrange(desc(total)) |>
+  
+  # Convert evidence type to factor
+  mutate(study_evidence_type = factor(study_evidence_type, levels = rev(study_evidence_type)))
+
+# Long format, filter out zeros so remaining bar takes full width
+evidence_long <- evidence_df |>
+  pivot_longer(cols = c(biodiversity, carbon), names_to = "offset_type", values_to = "n") |>
+  filter(n > 0)  # Remove zeros so other category takes full width
+
+# Create position object for consistent use
+pos_evi <- position_dodge2(width = 0.9, padding = 0, preserve = "single")
+
+# Create the plot
+panel_evidence <- ggplot(evidence_long, aes(x = study_evidence_type, y = n, fill = offset_type)) +
+  geom_col(position = pos_evi, color = "black", linewidth = 0.3, width = 0.9) +
+  geom_text(
+    aes(label = n),
+    position = pos_evi,
+    hjust = -0.3,
+    size = 8
+  ) +
+  # Use custom colors
+  scale_fill_manual(values = offset_colors, labels = c("Biodiversity", "Carbon")) +
+  
+  # Adjust y-axis
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  
+  # Flip the plot
+  coord_flip() +
+  
+  # Remove axis labels
+  labs(
+    x = NULL,
+    y = NULL, 
+    fill = NULL,
+    tag = "B"
+  ) +
+  
+  # Use minimal theme
+  theme_minimal(base_size = 25) +
+  
+  # Remove legend, grid, and axis labels
+  theme(
+    legend.position = "none",
+    panel.grid = element_blank(),
+    plot.tag = element_text(face = "bold", size = 29),
+    axis.text.x = element_blank()
+  )
+
+print(panel_evidence)
+```
+
+### Panel C: Top Countries
+
+This panel shows the top 5 countries with the most studies.
+
+```{r}
+#| label: summary-panel-c
+#| echo: true
+#| fig-width: 10
+#| fig-height: 5
+
+# Top countries data
+country_df <- final_df |>
+
+  # Filter out missing values
+  filter(!is.na(country), !is.na(offset_category_general)) |>
+  
+  # Remove duplicates
+  distinct(study_id, country, offset_category_general) |>
+  
+  # Recode country names
+  mutate(country = recode(country, 
+    "United States of America" = "USA", 
+    "United Kingdom" = "UK"
+  )) |>
+  
+  # Count number of studies per country
+  count(country, offset_category_general, name = "n") |>
+  
+  # Pivot to wide format
+  pivot_wider(names_from = offset_category_general, values_from = n, values_fill = 0) |>
+  
+  # Calculate total number of studies per country
+  mutate(total = biodiversity + carbon) |>
+  
+  # Select top 5 countries
+  slice_max(total, n = 5, with_ties = FALSE) |>
+  
+  # Arrange in descending order
+  arrange(desc(total)) |>
+  
+  # Convert country to factor
+  mutate(country = factor(country, levels = rev(country)))
+
+# Keep long format, filter out zeros so remaining bar takes full width
+country_long <- country_df |>
+  pivot_longer(cols = c(biodiversity, carbon), names_to = "offset_type", values_to = "n") |>
+  filter(n > 0)  # Remove zeros so other category takes full width
+
+# Create position object for consistent use
+pos <- position_dodge2(width = 0.9, padding = 0, preserve = "single")
+
+# Create the plot
+panel_countries <- ggplot(country_long, aes(x = country, y = n, fill = offset_type)) +
+  geom_col(position = pos, color = "black", linewidth = 0.3, width = 0.9) +
+  geom_text(
+    aes(label = n),
+    position = pos,
+    hjust = -0.3,
+    size = 8
+  ) +
+  
+  # Use custom colors
+  scale_fill_manual(values = offset_colors, labels = c("Biodiversity", "Carbon")) +
+  
+  # Adjust y-axis
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  
+  # Flip the plot
+  coord_flip() +
+  
+  # Remove axis labels
+  labs(
+    x = NULL,
+    y = NULL,
+    fill = NULL,
+    tag = "C"
+  ) +
+  
+  # Use minimal theme
+  theme_minimal(base_size = 25) +
+  theme(
+    legend.position = "none",
+    panel.grid = element_blank(),
+    plot.tag = element_text(face = "bold", size = 29),
+    axis.text.x = element_blank()
+  )
+
+print(panel_countries)
+```
+
+### Panel D: Top Offset Programs
+
+This panel shows the top 5 offset programs with the most studies. We group related programs into a single category for display.
+
+```{r}
+#| label: summary-panel-d-programs
+#| echo: true
+#| fig-width: 10
+#| fig-height: 6
+
+# Create a program grouping lookup table 
+program_group_lookup <- tribble(
+  ~program_name,                  ~program_group,                    ~component_label,
+  
+  # US CWA family
+  "US CWA 404 Permitting",        "US Compensatory Mitigation",      NA_character_,
+  "US Mitigation Banking",         "US Compensatory Mitigation",      NA_character_,
+  
+  # California carbon family
+  "CA Cap-and-Trade",              "CA ARB Forest Carbon",            NA_character_,
+  "California ARB Offset Program", "CA ARB Forest Carbon",            NA_character_,
+  "California Forest Carbon Offsets", "CA ARB Forest Carbon",         NA_character_,
+  
+  # Australia carbon family
+  "Australia CFI",                 "AUS Carbon Crediting",            NA_character_,
+  "Australia ERF",                 "AUS Carbon Crediting",            NA_character_,
+  "Australia ACCU Scheme",         "AUS Carbon Crediting",            NA_character_,
+  
+  # UNFCCC CDM family
+  "AIJ Pilot Phase",               "UNFCCC CDM",                     NA_character_,
+  "UNFCCC CDM",                    "UNFCCC CDM",                      NA_character_
+)
+
+# Top programs data — use program_group to collapse related programs
+program_df <- final_df |>
+  
+  # Filter out missing values
+  filter(!is.na(program_name), !is.na(offset_category_general)) |>
+  
+  # Left join with program_group_lookup
+  left_join(program_group_lookup, by = "program_name") |>
+  
+  # Coalesce program_group and component_label
+  mutate(
+    program_group = coalesce(program_group, program_name),
+    component_label = coalesce(component_label, NA_character_)
+  ) |>
+  
+  # Remove duplicates
+  distinct(study_id, program_group, component_label, offset_category_general) |>
+  
+  # Count number of studies per program group
+  count(program_group, component_label, offset_category_general, name = "n") |>
+  
+  # Pivot to wide format
+  pivot_wider(names_from = offset_category_general, values_from = n, values_fill = 0) |>
+  
+  # Calculate total number of studies per program group
+  mutate(total = biodiversity + carbon) |>
+  
+  # Arrange in descending order
+  arrange(desc(total)) |>
+  
+  # Select top 5 program groups
+  slice_head(n = 5) |>
+  
+  # Add component sub-labels for grouped families
+  mutate(
+    # Wrap the main group name first to ensure it's clean
+    program_group_wrapped = str_wrap(program_group, width = 30),
+    display_label = program_group_wrapped
+  ) |>
+  mutate(display_label = factor(display_label, levels = rev(display_label)))
+
+# Long format, filter out zeros
+program_long <- program_df |>
+  select(display_label, biodiversity, carbon) |>
+  pivot_longer(cols = c(biodiversity, carbon), names_to = "offset_type", values_to = "n") |>
+  filter(n > 0)
+
+# Create position object
+pos_prog <- position_dodge2(width = 0.9, padding = 0, preserve = "single")
+
+# Grouped bar plot 
+panel_programs <- ggplot(program_long, aes(x = display_label, y = n, fill = offset_type)) +
+  
+  # Add bars
+  geom_col(position = pos_prog, color = "black", linewidth = 0.3, width = 0.9) +
+  
+  # Add labels
+  geom_text(
+    aes(label = n),
+    position = pos_prog,
+    hjust = -0.3,
+    size = 8
+  ) +
+  
+  # Use custom colors
+  scale_fill_manual(values = offset_colors, labels = c("Biodiversity", "Carbon")) +
+  
+  # Adjust y-axis
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  
+  # Flip the plot
+  coord_flip() +
+  
+  # Remove axis labels
+  labs(
+    x = NULL,
+    y = NULL,  # Removed "Number of Studies" label
+    fill = NULL,
+    tag = "D"
+  ) +
+  
+  # Use minimal theme
+  theme_minimal(base_size = 25) +
+  
+  # Remove legend, grid, and axis labels
+  theme(
+    legend.position = "none",
+    panel.grid = element_blank(),
+    plot.tag = element_text(face = "bold", size = 29),
+    axis.text.x = element_blank()
+  )
+
+print(panel_programs)
+```
+
+#### Quick Check - Program Grouping
+
+Due to how the data was coded, some programs now grouped into families might be double counted. To verify that this is not the case, we compare the original program counts (which would double-count studies tagged with multiple programs) vs. the deduplicated grouped count.
+
+```{r}
+#| label: verify-program-grouping
+#| echo: true
+
+# Define the four grouped families
+grouped_families <- c(
+ "US Compensatory Mitigation",
+ "CA ARB Forest Carbon",
+ "AUS Carbon Crediting",
+ "UNFCCC CDM"
+)
+
+# --- Table 1: Before vs After counts per group ---
+# Individual program counts (naive sum — may double-count)
+individual_counts <- final_df |>
+ filter(!is.na(program_name), !is.na(offset_category_general)) |>
+ left_join(program_group_lookup, by = "program_name") |>
+ mutate(program_group = coalesce(program_group, program_name)) |>
+ filter(program_group %in% grouped_families) |>
+ distinct(study_id, program_name, program_group) |>
+ count(program_group, program_name, name = "n_studies_individual")
+
+# Grouped counts (deduplicated — what the figure actually uses)
+grouped_counts <- final_df |>
+ filter(!is.na(program_name), !is.na(offset_category_general)) |>
+ left_join(program_group_lookup, by = "program_name") |>
+ mutate(program_group = coalesce(program_group, program_name)) |>
+ filter(program_group %in% grouped_families) |>
+ distinct(study_id, program_group) |>
+ count(program_group, name = "n_studies_grouped")
+
+# Combine for comparison
+verification_summary <- individual_counts |>
+ group_by(program_group) |>
+ summarise(
+   member_programs = paste(program_name, " (", n_studies_individual, ")", sep = "", collapse = " + "),
+   naive_sum = sum(n_studies_individual),
+   .groups = "drop"
+ ) |>
+ left_join(grouped_counts, by = "program_group") |>
+ mutate(
+   overlap_studies = naive_sum - n_studies_grouped,
+   check = if_else(n_studies_grouped <= naive_sum, "✓ OK", "✗ ERROR")
+ )
+
+verification_summary |>
+ gt() |>
+ cols_label(
+   program_group = "Grouped Name",
+   member_programs = "Member Programs (individual n)",
+   naive_sum = "Naive Sum",
+   n_studies_grouped = "Grouped Count",
+   overlap_studies = "Overlap (deduplicated)",
+   check = "Status"
+ ) |>
+ tab_header(title = "Program Grouping Verification") |>
+ tab_footnote("Grouped Count should always be ≤ Naive Sum. Overlap = studies tagged with multiple programs in the same family.") |>
+ opt_stylize(style = 3)
+```
+
+And here we check which studies actually map to each group and their original program tags.
+
+```{r}
+#| label: verify-study-details
+#| echo: true
+
+# --- Table 2: Per-study detail for each group ---
+# Shows exactly which studies map to each group and their original program tags
+study_detail <- final_df |>
+ filter(!is.na(program_name), !is.na(offset_category_general)) |>
+ left_join(program_group_lookup, by = "program_name") |>
+ mutate(program_group = coalesce(program_group, program_name)) |>
+ filter(program_group %in% grouped_families) |>
+ distinct(study_id, study_title, program_name, program_group) |>
+ group_by(program_group, study_id, study_title) |>
+ summarise(
+   original_programs = paste(program_name, collapse = " + "),
+   n_programs_tagged = n(),
+   .groups = "drop"
+ ) |>
+ arrange(program_group, study_id)
+
+study_detail |>
+ gt(groupname_col = "program_group") |>
+ cols_label(
+   study_id = "Study ID",
+   study_title = "Study Title",
+   original_programs = "Original Program Tags",
+   n_programs_tagged = "# Tags"
+ ) |>
+ tab_header(title = "Study-Level Detail: Which Studies Map to Each Group") |>
+ tab_style(
+   style = cell_fill(color = "#FFF3CD"),
+   locations = cells_body(rows = n_programs_tagged > 1)
+ ) |>
+ tab_footnote("Highlighted rows = studies tagged with multiple programs in the same family (these are the ones being deduplicated).") |>
+ opt_stylize(style = 3) |>
+ cols_width(study_title ~ px(350))
+```
+
+### Panel E: Publication Timeline
+
+This panel creates a timeline of studies published per year, each bar has a proportion broken down by offset category.
+
+```{r}
+#| label: summary-panel-e
+#| echo: true
+#| fig-width: 10
+#| fig-height: 4
+
+# Timeline data
+timeline_df <- final_df |>
+  # Filter out missing values 
+  filter(!is.na(study_publication_year), !is.na(offset_category_general)) |>
+  
+  # Remove duplicates
+  distinct(study_id, study_publication_year, offset_category_general) |>
+  
+  # Count number of studies per year and offset category
+  count(study_publication_year, offset_category_general, name = "n_studies")
+
+# Calculate totals per year for labels
+timeline_totals <- timeline_df |>
+  group_by(study_publication_year) |>
+  summarise(total = sum(n_studies), .groups = "drop")
+
+# Create the timeline plot
+panel_timeline <- ggplot(timeline_df, aes(x = study_publication_year, y = n_studies, fill = offset_category_general)) +
+  geom_col(position = "stack", color = "black", linewidth = 0.3) +
+  geom_text(
+    data = timeline_totals,
+    aes(x = study_publication_year, y = total, label = total, fill = NULL),
+    vjust = -0.3,
+    size = 8,
+    inherit.aes = FALSE
+  ) +
+  scale_fill_manual(values = offset_colors, labels = c("Biodiversity", "Carbon")) +
+  scale_x_continuous(breaks = seq(1995, 2025, 5)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  labs(
+    x = "Publication Year",
+    y = NULL,
+    fill = NULL,
+    tag = "E"
+  ) +
+  theme_minimal(base_size = 25) +
+  theme(
+    legend.position = "none",
+    panel.grid = element_blank(),
+    plot.tag = element_text(face = "bold", size = 29),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+    axis.text.y = element_blank()
+  )
+
+print(panel_timeline)
+```
+
+### Combined Summary Figure (5 Panels)
+
+Now we combine all panels into a single figure.
+
+```{r}
+#| label: summary-combined-5panel
+#| echo: true
+#| fig-width: 18
+#| fig-height: 14
+
+# Layout design:
+# Row 1: Evidence (A) | Ecosystems (B)
+# Row 2: Countries (C) | Programs (D)
+# Row 3: Timeline (E) - full width
+
+# Define explicit layout design
+# Each letter represents a panel; duplicate letters to span columns
+# Row 1: A|B, Row 2: C|D, Row 3: E (full width)
+design <- "
+  AABB
+  CCDD
+  EEEE
+"
+
+# Combine all panels using the explicit design
+summary_fig <- panel_ecosystems + 
+               panel_evidence + 
+               panel_countries + 
+               panel_programs + 
+               panel_timeline +
+  plot_layout(design = design, heights = c(1, 1, 0.8)) +
+  plot_annotation(
+    title = NULL,
+    theme = theme(plot.margin = margin(10, 10, 10, 10))
+  )
+
+# Remove individual legends, add shared legend
+summary_fig <- summary_fig & theme(legend.position = "none")
+
+# Create a version with shared legend
+legend_plot <- ggplot(timeline_df, aes(x = study_publication_year, y = n_studies, fill = offset_category_general)) +
+  geom_col() +
+  scale_fill_manual(values = offset_colors, labels = c("Biodiversity", "Carbon")) +
+  theme_minimal() +
+  theme(
+    legend.position = "top", 
+    legend.title = element_blank(),
+    legend.text = element_text(size = 27),
+    legend.key.size = unit(1.5, "cm")
+  )
+
+# Get the legend
+library(cowplot)
+legend <- get_legend(legend_plot)
+
+# Combine with legend at TOP
+final_summary <- plot_grid(
+  legend,
+  summary_fig,
+  ncol = 1,
+  rel_heights = c(0.1, 1)
+)
+
+print(final_summary)
+```
+
+### Save Summary Figure
+
+```{r}
+#| label: save-summary-fig
+#| echo: false
+
+ggsave(
+  filename = here("output", "figures", "main", "fig-2-summary-5-panel.svg"),
+  plot = final_summary,
+  width = 18,
+  height = 20,
+  units = "in"
+)
+```
+
+## Figure 3: Diverging Bar Chart (Relative Risk Prevalence) {#fig-3}
+
+This figure shows the distribution of all permanence risk types across biodiversity and carbon offset studies, normalized by the total number of studies in each category. Bars extend left (percentage of biodiversity studies) and right (percentage of carbon studies), colored by risk category. Dashed lines separate risk categories; solid black lines separate risk domains.
+
+```{r}
+#| label: fig-3-diverging-bar-proportions
+#| echo: false
+#| fig-width: 14
+#| fig-height: 12
+#| fig-cap: "Relative prevalence of permanence risk types across biodiversity and carbon offset studies. Bars show the percentage of studies in each category reporting a given risk type. Dashed lines separate risk categories; solid lines separate risk domains."
+
+# Get total study counts per offset category
+total_studies <- final_df |>
+  filter(!is.na(offset_category_general)) |>
+  distinct(study_id, offset_category_general) |>
+  count(offset_category_general, name = "total_n")
+
+# Prepare and order risk data with proportions
+risk_cat_prop <- final_df |>
+  filter(
+    !is.na(permanence_risk_domain),
+    !is.na(permanence_risk_category),
+    !is.na(permanence_risk_type),
+    !is.na(offset_category_general)
+  ) |>
+  distinct(study_id, permanence_risk_domain, permanence_risk_category, permanence_risk_type,
+           offset_category_general) |>
+  count(permanence_risk_domain, permanence_risk_category, permanence_risk_type, offset_category_general, name = "n") |>
+  left_join(total_studies, by = "offset_category_general") |>
+  mutate(prop = (n / total_n) * 100) |>  # Convert to percentage
+  select(-n, -total_n) |>
+  pivot_wider(names_from = offset_category_general, values_from = prop, values_fill = 0) |>
+  mutate(
+    total = biodiversity + carbon,
+    permanence_risk_domain = factor(permanence_risk_domain, levels = domain_order)
+  ) |>
+  arrange(permanence_risk_domain, permanence_risk_category, desc(total)) |>
+  mutate(risk_type_label = factor(permanence_risk_type, levels = rev(unique(permanence_risk_type))))
+
+# Re-order for plotting
+risk_cat_prop <- risk_cat_prop |>
+  arrange(permanence_risk_domain, permanence_risk_category, desc(total)) |>
+  mutate(risk_type_label = paste0(permanence_risk_type)) |>
+  mutate(risk_type_label = factor(risk_type_label, levels = rev(unique(risk_type_label))))
+
+# Long format for diverging bars
+risk_prop_long <- risk_cat_prop |>
+  select(permanence_risk_domain, permanence_risk_category, risk_type_label, biodiversity, carbon) |>
+  pivot_longer(cols = c(biodiversity, carbon), names_to = "offset_category", values_to = "prop") |>
+  mutate(prop = if_else(offset_category == "biodiversity", -prop, prop))
+
+# Line positions: category-level (reuse from iteration 1)
+risk_prop_positions <- risk_cat_prop |>
+  mutate(row = as.numeric(factor(risk_type_label, levels = levels(risk_type_label)))) |>
+  group_by(permanence_risk_domain, permanence_risk_category) |>
+  summarise(max_row = max(row), .groups = "drop") |>
+  arrange(permanence_risk_domain, permanence_risk_category) |>
+  mutate(line_y = max_row + 0.5)
+
+# Line positions: domain-level
+domain_breaks_prop <- risk_cat_prop |>
+  mutate(row = as.numeric(factor(risk_type_label, levels = levels(risk_type_label)))) |>
+  group_by(permanence_risk_domain) |>
+  summarise(max_row = max(row), .groups = "drop") |>
+  arrange(permanence_risk_domain) |>
+  mutate(line_y = max_row + 0.5)
+
+# Create label dataframe
+risk_prop_labels <- risk_prop_long |>
+  filter(prop != 0) |>
+  mutate(
+    hjust_val = if_else(prop < 0, 1.2, -0.2),
+    y_val = prop,
+    x_val = risk_type_label,
+    label_text = paste0(round(abs(prop), 0), "%")
+  )
+
+# Apply risk category colors
+risk_prop_long <- risk_prop_long |>
+  mutate(permanence_risk_category = factor(permanence_risk_category, levels = names(global_risk_colors)))
+
+# Calculate bracket annotation positions
+row_positions_prop <- risk_cat_prop |>
+  mutate(row = as.numeric(factor(risk_type_label, levels = levels(risk_type_label))))
+
+bracket_data_prop <- row_positions_prop |>
+  group_by(permanence_risk_category, permanence_risk_domain) |>
+  summarise(
+    y_start = min(row),
+    y_end = max(row),
+    y_mid = (min(row) + max(row)) / 2,
+    .groups = "drop"
+  ) |>
+  mutate(color = global_risk_colors[as.character(permanence_risk_category)])
+
+# Calculate symmetric axis limits for proportions
+max_carbon_prop <- max(risk_prop_long$prop[risk_prop_long$prop > 0], na.rm = TRUE)
+max_biodiversity_prop <- abs(min(risk_prop_long$prop[risk_prop_long$prop < 0], na.rm = TRUE))
+max_abs_prop <- max(max_carbon_prop, max_biodiversity_prop)
+
+# Symmetric limits with buffer
+symmetric_limit_prop <- max_abs_prop * 1.5
+
+# Position bracket annotations outside the plot area
+bracket_x_prop <- symmetric_limit_prop + 5
+
+# Plot with proportions
+p_prop <- ggplot(risk_prop_long, aes(x = risk_type_label, y = prop, fill = permanence_risk_category)) +
+  geom_col(color = "black") +
+  geom_text(
+    data = risk_prop_labels,
+    aes(x = x_val, y = y_val, label = label_text, hjust = hjust_val),
+    size = 22 / .pt,
+    color = "black",
+    inherit.aes = FALSE
+  ) +
+  geom_hline(yintercept = 0, color = "black", linewidth = 1.2) +
+  geom_segment(
+    data = risk_prop_positions,
+    aes(x = line_y, xend = line_y, y = -Inf, yend = Inf),
+    inherit.aes = FALSE,
+    linetype = "dashed",
+    color = "gray70"
+  ) +
+  geom_segment(
+    data = domain_breaks_prop,
+    aes(x = line_y, xend = line_y, y = -Inf, yend = Inf),
+    inherit.aes = FALSE,
+    linetype = "dashed",
+    color = "black",
+    linewidth = 1
+  ) +
+  # Bracket vertical lines
+  geom_segment(
+    data = bracket_data_prop,
+    aes(x = y_start - 0.3, xend = y_end + 0.3, y = bracket_x_prop, yend = bracket_x_prop),
+    inherit.aes = FALSE,
+    color = "gray30",
+    linewidth = 0.8
+  ) +
+  # Bracket top tick
+  geom_segment(
+    data = bracket_data_prop,
+    aes(x = y_start - 0.3, xend = y_start - 0.3, y = bracket_x_prop, yend = bracket_x_prop - 3),
+    inherit.aes = FALSE,
+    color = "gray30",
+    linewidth = 0.8
+  ) +
+  # Bracket bottom tick
+  geom_segment(
+    data = bracket_data_prop,
+    aes(x = y_end + 0.3, xend = y_end + 0.3, y = bracket_x_prop, yend = bracket_x_prop - 3),
+    inherit.aes = FALSE,
+    color = "gray30",
+    linewidth = 0.8
+  ) +
+  # Colored squares for categories
+  geom_point(
+    data = bracket_data_prop,
+    aes(x = y_mid, y = bracket_x_prop + 5),
+    fill = bracket_data_prop$color,
+    color = "black",
+    shape = 22,
+    size = 9,
+    inherit.aes = FALSE
+  ) +
+  # Category labels
+  geom_text(
+    data = bracket_data_prop,
+    aes(x = y_mid, y = bracket_x_prop + 9, label = permanence_risk_category),
+    hjust = 0,
+    size = 22 / .pt,
+    inherit.aes = FALSE
+  ) +
+  scale_fill_manual(values = global_risk_colors, guide = "none") +
+  scale_y_continuous(
+    labels = function(x) paste0(abs(x), "%"),
+    expand = expansion(mult = c(0.02, 0.02)),
+    sec.axis = dup_axis(name = NULL, labels = NULL)
+  ) +
+  coord_flip(clip = "off", ylim = c(-symmetric_limit_prop, symmetric_limit_prop)) +
+  labs(
+    title = NULL,
+    x = NULL,
+    y = "Percentage of Studies"
+  ) +
+  theme_minimal(base_size = 22) +
+  theme(
+    plot.title = element_blank(),
+    axis.text.y = element_text(size = 22),
+    axis.text.x = element_text(size = 22),
+    axis.title.x.bottom = element_text(size = 22, margin = margin(t = 15)),
+    axis.title.x.top = element_text(size = 22, margin = margin(b = 15)),
+    axis.title.y = element_text(size = 22, margin = margin(r = 20)),
+    legend.position = "none",
+    panel.grid = element_blank(),
+    plot.margin = margin(t = 1.5, r = 22, b = 1, l = 0.5, unit = "cm")
+  )
+
+print(p_prop)
+```
+
+### Save Figure 3
+
+```{r}
+#| label: save-fig-3-prop
+#| echo: false
+
+# SVG (vector)
+ggsave(
+  filename = here("output", "figures", "main", "fig-3-div-bar-rel-prop.svg"),
+  plot = last_plot(),
+  width = 24,
+  height = 24,
+  units = "in"
+)
+```
+
+## Figure 4: Heatmap of Top Risk Pairs × Offset Category (Domain-Colored)
+
+This figure looks at the 10 most common risk pairs and shows their co-occurrence per offset category.
+
+```{r}
+#| label: cooccurrence-heatmap-domain
+#| echo: true
+#| fig-width: 12
+#| fig-height: 10
+
+library(ggtext)
+
+# --- Step 1: Build risk type → category lookup ---
+risk_type_info <- final_df |>
+  filter(!is.na(permanence_risk_type), !is.na(permanence_risk_category)) |>
+  distinct(permanence_risk_type, permanence_risk_category)
+
+# --- Step 2: Generate risk pairs per study × offset type ---
+pair_by_offset <- final_df |>
+  filter(!is.na(permanence_risk_type), !is.na(offset_category_general)) |>
+  distinct(study_id, offset_category_general, permanence_risk_type) |>
+  group_by(study_id, offset_category_general) |>
+  summarise(risk_pair = list(get_combos(permanence_risk_type, combo_size = 2)), .groups = "drop") |>
+  unnest(risk_pair) |>
+  mutate(
+    risk_a = map_chr(risk_pair, ~ sort(.x)[1]),
+    risk_b = map_chr(risk_pair, ~ sort(.x)[2]),
+    pair_label = paste0(risk_a, " + ", risk_b)
+  ) |>
+  count(offset_category_general, pair_label, risk_a, risk_b, name = "n")
+
+# --- Step 3: Top 10 pairs per offset type, then union ---
+top_bio <- pair_by_offset |>
+  filter(offset_category_general == "biodiversity") |>
+  slice_max(n, n = 10, with_ties = FALSE)
+
+top_carbon <- pair_by_offset |>
+  filter(offset_category_general == "carbon") |>
+  slice_max(n, n = 10, with_ties = FALSE)
+
+all_top_pairs <- unique(c(top_bio$pair_label, top_carbon$pair_label))
+
+# --- Step 4: Filter and complete ---
+pair_heat <- pair_by_offset |>
+  filter(pair_label %in% all_top_pairs) |>
+  complete(offset_category_general, nesting(pair_label, risk_a, risk_b), fill = list(n = 0)) |>
+  group_by(pair_label) |>
+  mutate(total_n = sum(n)) |>
+  ungroup()
+
+# --- Step 5: Build domain-colored labels ---
+# Helper to get domain color (same as dot plot)
+heat_get_domain_col <- function(risk_name, info_lookup) {
+  domain <- info_lookup |>
+    filter(permanence_risk_type == risk_name) |>
+    pull(permanence_risk_domain) |>
+    first()
+  case_when(
+    domain == "non-physical" ~ "#4E79A7",
+    domain == "physical" ~ "#59A14F",
+    domain == "methodological" ~ "#E15759",
+    TRUE ~ "black"
+  )
+}
+
+# Build risk-to-domain mapping for the heatmap
+risk_info_heat <- final_df |>
+  filter(!is.na(permanence_risk_type), !is.na(permanence_risk_domain)) |>
+  distinct(permanence_risk_type, permanence_risk_domain)
+
+pair_heat <- pair_heat |>
+  mutate(
+    colored_label = paste0(
+      "<span style='color:", map_chr(risk_a, ~ heat_get_domain_col(.x, risk_info_heat)), "'>", risk_a, "</span> <span style='color:black'>&</span><br>",
+      "<span style='color:", map_chr(risk_b, ~ heat_get_domain_col(.x, risk_info_heat)), "'>", risk_b, "</span>"
+    )
+  )
+
+# --- Step 6: Define custom order (Bio top 10 on top, then Carbon) ---
+# Biodiversity top 10 (highest n at the very top)
+bio_top_labels <- pair_heat |>
+  filter(offset_category_general == "biodiversity", pair_label %in% top_bio$pair_label) |>
+  arrange(n) |> 
+  pull(colored_label) # Pull the NEW colored labels
+
+# Carbon top 10 excluding any already in bio top 10
+carbon_top_labels <- pair_heat |>
+  filter(offset_category_general == "carbon", pair_label %in% top_carbon$pair_label) |>
+  filter(!(pair_label %in% top_bio$pair_label)) |>
+  arrange(n) |>
+  pull(colored_label) # Pull the NEW colored labels
+
+label_order <- c(carbon_top_labels, bio_top_labels)
+
+pair_heat <- pair_heat |>
+  mutate(colored_label = factor(colored_label, levels = label_order)) |>
+  mutate(
+    pct = if_else(
+      offset_category_general == "biodiversity",
+      (n / 80) * 100,
+      (n / 57) * 100
+    ),
+    pct_label = paste0(round(pct, 1), "%")
+  )
+
+# --- Step 7: Manual Color Calculation for Faceting ---
+# We need to compute the gradient colors manually to use scale_fill_identity
+# preventing the need for two separate plots + patchwork
+# Bio Gradient: #f3eef8 -> #B19CD9
+# Carbon Gradient: #fef9e7 -> #F0C05A
+
+
+# Calculate distinct max values per market to ensure each reaches full intensity
+max_bio_pct <- max(pair_heat$pct[pair_heat$offset_category_general == "biodiversity"], na.rm = TRUE)
+max_carbon_pct <- max(pair_heat$pct[pair_heat$offset_category_general == "carbon"], na.rm = TRUE)
+
+# Create color generating functions with market-specific domains
+col_fun_bio <- col_numeric(palette = c("#f3eef8", "#B19CD9"), domain = c(0, max_bio_pct))
+col_fun_carbon <- col_numeric(palette = c("#fef9e7", "#F0C05A"), domain = c(0, max_carbon_pct))
+
+pair_heat <- pair_heat |>
+  mutate(
+    fill_color = if_else(
+      offset_category_general == "biodiversity",
+      col_fun_bio(pct),
+      col_fun_carbon(pct)
+    ),
+    # Ensure text is black (user request)
+    text_color = "black" 
+  )
+
+# --- Step 8: Single Faceted Plot ---
+p_dual_heat <- ggplot(pair_heat, aes(x = "1", y = colored_label, fill = fill_color)) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  geom_text(aes(label = pct_label), size = 7.5, color = "black") +
+  scale_fill_identity() +
+  scale_x_discrete(expand = c(0, 0)) +
+  facet_grid(. ~ offset_category_general, switch = "x") + # Switch moves strips to bottom (we want top?)
+  # Actually, standard facet puts strips on top which acts as headers
+  labs(x = NULL, y = NULL) +
+  theme_minimal(base_size = 21) +
+  theme(
+    axis.text.x = element_blank(), # No x-axis text inside panels, headers are strips
+    axis.ticks.x = element_blank(),
+    axis.text.y = element_markdown(size = 21, lineheight = 1.3),
+    panel.grid = element_blank(),
+    # CRITICAL: Eliminate spacing between facets
+    panel.spacing = unit(0.1, "lines"), 
+    strip.placement = "outside",
+    strip.background = element_blank(),
+    strip.text = element_text(size = 23, color = "black", margin = margin(b = 10))
+  )
+
+# Fix strip labels to be Capitalized
+# We can modify the factor levels or use a labeller
+label_names <- c("biodiversity" = "Biodiversity", "carbon" = "Carbon")
+p_dual_heat <- p_dual_heat + facet_grid(. ~ offset_category_general, labeller = as_labeller(label_names))
+
+print(p_dual_heat)
+```
+
+### Save Heatmap
+
+```{r}
+#| label: save-cooccurrence-heatmap
+#| echo: false
+
+ggsave(
+  filename = here("output", "figures", "main", "fig-4-co-occur-heatmap.svg"),
+  plot = p_dual_heat,
+  width = 11, # Reduced width
+  height = 18,
+  units = "in"
+)
+```
+
+
+## Figure 5: World Map with Risk Distribution {#fig-5}
+
+World map with pie charts showing risk category distribution by continent.
+
+```{r}
+#| label: fig-5-world-map-prep
+#| echo: false
+#| message: false
+#| warning: false
+
+# --- Pie data: continent-level risk proportions (used by scatterpie) ---
+
+# Weighted risk category shares per continent
+pie_plot_df <- final_df |>
+  filter(!is.na(study_id), !is.na(permanence_risk_category),
+         !is.na(permanence_risk_domain), !is.na(continent)) |>
+  distinct(study_id, continent, permanence_risk_category, permanence_risk_domain) |>
+  group_by(study_id, continent) |>
+  mutate(weight = 1 / n()) |>
+  ungroup() |>
+  group_by(continent, permanence_risk_category) |>
+  summarise(weighted_sum = sum(weight), .groups = "drop") |>
+  group_by(continent) |>
+  mutate(
+    total_studies = sum(weighted_sum),
+    percentage = (weighted_sum / total_studies) * 100
+  ) |>
+  ungroup() |>
+  mutate(permanence_risk_category = factor(permanence_risk_category,
+                                           levels = names(global_risk_colors)))
+
+# Store risk category levels for scatterpie cols argument
+risk_cat_levels <- levels(pie_plot_df$permanence_risk_category)
+
+# --- Map data: Robinson projection with stadium crop ---
+
+world <- ne_countries(scale = "medium", returnclass = "sf") |>
+  filter(sovereignt != "Antarctica")
+coast <- ne_download(scale = 50, type = "coastline", category = "physical", returnclass = "sf")
+
+robin_crs <- "+proj=robin"
+world_robin <- st_transform(world, crs = robin_crs)
+coast_robin <- st_transform(coast, crs = robin_crs)
+
+bbox_crop <- st_bbox(c(xmin = -18000000, xmax = 18000000,
+                       ymin = -7000000, ymax = 9000000),
+                     crs = robin_crs)
+world_crop <- st_intersection(world_robin, st_as_sfc(bbox_crop))
+coast_crop <- st_intersection(coast_robin, st_as_sfc(bbox_crop))
+
+# Stadium border shape
+make_stadium <- function(xmin, xmax, ymin, ymax, n = 200, crs) {
+  r <- (ymax - ymin) / 2
+  y_center <- (ymax + ymin) / 2
+  theta_left  <- seq(pi / 2, 3 * pi / 2, length.out = n)
+  theta_right <- seq(-pi / 2, pi / 2, length.out = n)
+  coords <- rbind(
+    cbind(xmin + r * cos(theta_left),  y_center + r * sin(theta_left)),
+    cbind(xmax + r * cos(theta_right), y_center + r * sin(theta_right))
+  )
+  coords <- rbind(coords, coords[1, ])
+  st_sfc(st_polygon(list(coords)), crs = crs)
+}
+
+stadium <- make_stadium(-6000000, 10000000, -7000000, 9000000, crs = robin_crs)
+world_stadium <- st_intersection(world_crop, stadium)
+coast_stadium <- st_intersection(coast_crop, stadium)
+
+# --- Continent centroids (Robinson) + pie data for scatterpie ---
+
+continent_coords <- data.frame(
+  continent = c("Africa", "Asia", "Europe", "North America", "South America", "Oceania"),
+  lon = c(25, 90, 10, -100, -60, 140),
+  lat = c(5, 40, 52, 40, -15, -30)
+)
+
+continent_robin <- st_transform(
+  st_as_sf(continent_coords, coords = c("lon", "lat"), crs = 4326),
+  crs = robin_crs
+)
+continent_coords <- cbind(continent_coords, st_coordinates(continent_robin))
+
+continent_abbrev <- c(
+  "Africa" = "AF", "Asia" = "AS", "Europe" = "EU",
+  "North America" = "NA", "South America" = "SA", "Oceania" = "OC"
+)
+
+# Wide-format pie data for scatterpie
+pie_df <- pie_plot_df |>
+  select(continent, permanence_risk_category, percentage, total_studies) |>
+  tidyr::pivot_wider(names_from = permanence_risk_category,
+                     values_from = percentage, values_fill = 0) |>
+  left_join(continent_coords, by = "continent") |>
+  mutate(
+    label = paste0(continent_abbrev[continent], " (", round(total_studies), ")"),
+    label_X = case_when(
+      continent %in% c("South America", "Europe") ~ X - 3e6,
+      continent == "Oceania" ~ X - 1e6,
+      TRUE ~ X
+    ),
+    label_Y = case_when(
+      continent %in% c("North America", "Africa", "Asia") ~ Y + 2e6,
+      continent == "Oceania" ~ Y - 2e6,
+      TRUE ~ Y
+    )
+  )
+```
+
+Then plot the figure.
+
+```{r}
+#| label: fig-5-world-map
+#| echo: false
+#| fig-width: 12
+#| fig-height: 6
+#| fig-cap: "Global distribution of permanence risk categories. Pie charts show the proportion of risk types mentioned in studies from each continent. Labels show continent abbreviation and total study count."
+
+ggplot() +
+  geom_sf(data = world_stadium, fill = "bisque1", color = NA) +
+  geom_sf(data = coast_stadium, color = "gray50", size = 0.2) +
+  geom_sf(data = stadium, fill = NA, color = "black", size = 0.5) +
+  geom_scatterpie(
+    data = pie_df,
+    aes(x = X, y = Y, r = 1.4e6),
+    cols = risk_cat_levels,
+    color = "black", size = 0.3
+  ) +
+  scale_fill_manual(values = global_risk_colors) +
+  geom_text(
+    data = pie_df,
+    aes(x = label_X, y = label_Y, label = label),
+    size = 3.5, fontface = "bold"
+  ) +
+  coord_sf(crs = robin_crs) +
+  theme_void(base_size = 16) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 12),
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+    plot.margin = margin(t = 5, r = 1, b = 5, l = 1)
+  ) +
+  guides(fill = guide_legend(nrow = 5, ncol = 2, byrow = TRUE))
+```
+
+### Save Figure 5
+
+```{r}
+#| label: save-fig-5
+#| echo: false
+
+ggsave(
+  filename = here("output", "figures", "main", "fig-5-world-map-pies.svg"),
+  plot = last_plot(),
+  width = 12,
+  height = 6,
+  units = "in"
+)
+```
+
+## Figure 6: Temporal Trends by Program {#fig-6}
+
+This figure shows temporal trends in permanence risk categories for the two most common offset programs (REDD+ and U.S. Wetland Mitigation).
+
+```{r}
+#| label: fig-6-temporal-programs
+#| echo: false
+#| fig-width: 12
+#| fig-height: 14
+#| fig-cap: "Temporal trends in permanence risk categories for the two most common offset programs. Stacked bars show percentage of studies reporting each risk category within 5-year periods. Numbers above bars indicate total studies in each period."
+
+# Filter and bin data
+final_df_binned <- final_df %>%
+  filter(
+    !is.na(study_id),
+    !is.na(permanence_risk_category),
+    !is.na(permanence_risk_domain),
+    !is.na(study_publication_year),
+    program_name %in% c("REDD+", "US CWA 404 Permitting", "US Mitigation Banking")
+  ) %>%
+  mutate(
+    period = cut(
+      study_publication_year,
+      breaks = c(1990, 1995, 2000, 2005, 2010, 2015, 2020, 2026),
+      labels = c("1990-1994", "1995-1999", "2000-2004", "2005-2009",
+                 "2010-2014", "2015-2019", "2020-2025"),
+      right = FALSE
+    ),
+    program_group = case_when(
+      program_name %in% c("US CWA 404 Permitting", "US Mitigation Banking") ~
+        "U.S. Compensatory Mitigation",
+      TRUE ~ program_name
+    )
+  )
+
+# Calculate fractional weights per study
+study_risk_weights <- final_df_binned %>%
+  distinct(study_id, program_group, period, permanence_risk_category) %>%
+  group_by(study_id, program_group, period) %>%
+  mutate(weight = 1 / n()) %>%
+  ungroup()
+
+# Sum weights for proportional representation
+risk_shares <- study_risk_weights %>%
+  group_by(program_group, period, permanence_risk_category) %>%
+  summarise(weighted_sum = sum(weight), .groups = "drop")
+
+# Total studies per period/program
+total_study_counts <- final_df_binned %>%
+  distinct(study_id, program_group, period) %>%
+  count(program_group, period, name = "total_studies")
+
+# Combine and calculate percentages
+plot_df <- risk_shares %>%
+  left_join(total_study_counts, by = c("program_group", "period")) %>%
+  mutate(
+    percentage = (weighted_sum / total_studies) * 100,
+    label = ifelse(weighted_sum > 0, round(weighted_sum, 1), "")
+  )
+
+# Apply global risk colors
+plot_df <- plot_df %>%
+  mutate(permanence_risk_category = factor(permanence_risk_category, levels = names(global_risk_colors)))
+
+# Plot
+ggplot(plot_df, aes(x = period, y = percentage, fill = permanence_risk_category)) +
+  geom_col(color = "black") +
+  geom_text(
+    data = total_study_counts,
+    aes(x = period, y = 110, label = total_studies),
+    inherit.aes = FALSE, size = 8
+  ) +
+  facet_wrap(~ program_group, ncol = 1) +
+  scale_fill_manual(values = global_risk_colors) +
+  labs(
+    x = NULL,
+    y = "Percentage of Studies",
+    fill = "Risk Category"
+  ) +
+  theme_minimal(base_size = 20) +
+  theme(
+    axis.text.x = element_text(size = 20, angle = 45, hjust = 1),
+    legend.position = "top",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 20),
+    strip.text = element_text(size = 20),
+    panel.spacing = unit(2, "lines"),
+    panel.grid = element_blank(),
+    plot.margin = margin(30, 10, 10, 10)
+  ) +
+  guides(fill = guide_legend(ncol = 2, byrow = TRUE))
+```
+
+### Save Figure 6
+
+```{r}
+#| label: save-fig-6
+#| echo: false
+
+ggsave(
+  filename = here("output", "figures", "main", "fig-6-temporal-risks-program.svg"),
+  plot = last_plot(),
+  width = 15,
+  height = 16,
+  units = "in"
+)
+```
