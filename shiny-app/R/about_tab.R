@@ -18,12 +18,6 @@ aboutTabUI <- function() {
         theme = "primary"
       ),
       value_box(
-        title = "Countries Covered",
-        value = if (!is.null(db_summary_stats)) db_summary_stats$n_countries else "---",
-        showcase = icon("globe"),
-        theme = "success"
-      ),
-      value_box(
         title = "Risk Types Identified",
         value = if (!is.null(db_summary_stats)) {
           if (!is.null(db_summary_stats$n_risk_types)) db_summary_stats$n_risk_types else nrow(typology)
@@ -37,6 +31,12 @@ aboutTabUI <- function() {
           paste(db_summary_stats$year_range, collapse = "\u2013")
         } else "---",
         showcase = icon("calendar"),
+        theme = "success"
+      ),
+      value_box(
+        title = "Countries Covered",
+        value = if (!is.null(db_summary_stats)) db_summary_stats$n_countries else "---",
+        showcase = icon("globe"),
         theme = "info"
       )
     ),

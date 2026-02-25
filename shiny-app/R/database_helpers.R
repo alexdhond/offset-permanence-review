@@ -22,7 +22,7 @@
 studies_data <- readRDS("data/offset_perm_rev_condensed.rds")
 
 # Join study_abstract and doi from excel_data (loaded in global.R)
-excel_subset <- excel_data |> dplyr::select(study_title, study_abstract, doi, permanence_risk_evidence_and_reasoning)
+excel_subset <- excel_data |> dplyr::select(study_title, study_abstract, doi)
 studies_data <- studies_data |> dplyr::left_join(excel_subset, by = "study_title")
 
 # --- Load citation lookup and join by closest study title ---

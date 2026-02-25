@@ -14,9 +14,6 @@ source("R/explore_tab_server.R")
 source("R/risks_tab_server.R")
 
 server <- function(input, output, session) {
-  # ---- Shared State: Country Filter ----
-  shared_country_filter <- reactiveVal("All")
-
   # --- Listen for go_to_tab message from JS and update navbar ---
   observeEvent(input$go_to_tab, {
     nav_select("main_tabs", input$go_to_tab, session = session)
@@ -56,42 +53,6 @@ server <- function(input, output, session) {
   observeEvent(input$selected_risk_info, {
     req(input$selected_risk_info$domain)
     nav_select("main_tabs", input$selected_risk_info$tab %||% "Risks", session = session)
-  }, ignoreInit = TRUE)
-
-  # --- Search and country filter logic ---
-  # Use normalized country names from map_locations for consistency with map filter
-  output$country_filter_ui <- renderUI({
-    if (!is.null(map_locations)) {
-      countries <- sort(unique(map_locations$country_clean))
-    } else {
-      countries <- unique(unlist(strsplit(as.character(studies_data$country), ";|,| and ")))
-      countries <- sort(trimws(countries[nzchar(countries)]))
-    }
-    selectInput("country_filter", "Filter by country",
-                choices = c("All", countries), selected = "All")
-  })
-
-  # ---- Country Filter Synchronization ----
-  observeEvent(input$country_filter, {
-    if (!is.null(input$country_filter)) {
-      shared_country_filter(input$country_filter)
-    }
-  }, ignoreInit = TRUE)
-
-  observeEvent(input$map_country_filter, {
-    if (!is.null(input$map_country_filter)) {
-      shared_country_filter(input$map_country_filter)
-    }
-  }, ignoreInit = TRUE)
-
-  observeEvent(shared_country_filter(), {
-    current <- shared_country_filter()
-    if (!is.null(input$country_filter) && input$country_filter != current) {
-      updateSelectInput(session, "country_filter", selected = current)
-    }
-    if (!is.null(input$map_country_filter) && input$map_country_filter != current) {
-      updateSelectInput(session, "map_country_filter", selected = current)
-    }
   }, ignoreInit = TRUE)
 
   # Handler for study navigation from other tabs

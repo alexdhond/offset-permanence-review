@@ -42,14 +42,14 @@ exploreTabUI <- function() {
           card(
             card_header("Publication Timeline"),
             card_body(
-              withSpinner(plotlyOutput("plot_timeline", height = "300px"),
+              withSpinner(plotlyOutput("plot_timeline", height = "350px"),
                           type = 4, color = "#3c8dbc")
             )
           ),
           card(
             card_header("Evidence Types"),
             card_body(
-              withSpinner(plotlyOutput("plot_evidence", height = "300px"),
+              withSpinner(plotlyOutput("plot_evidence", height = "350px"),
                           type = 4, color = "#3c8dbc")
             )
           )
@@ -59,28 +59,42 @@ exploreTabUI <- function() {
           card(
             card_header("Top Ecosystems"),
             card_body(
-              withSpinner(plotlyOutput("plot_ecosystem", height = "300px"),
+              withSpinner(plotlyOutput("plot_ecosystem", height = "350px"),
                           type = 4, color = "#3c8dbc")
             )
           ),
           card(
             card_header("Top Countries"),
             card_body(
-              withSpinner(plotlyOutput("plot_country", height = "300px"),
+              withSpinner(plotlyOutput("plot_country", height = "350px"),
                           type = 4, color = "#3c8dbc")
             )
           ),
           card(
             card_header("Top Programs"),
             card_body(
-              withSpinner(plotlyOutput("plot_program", height = "300px"),
+              withSpinner(plotlyOutput("plot_program", height = "350px"),
                           type = 4, color = "#3c8dbc")
             )
           )
         )
       ),
 
-      # Card 2: Risk Co-occurrence
+      # Card 2: Risk Prevalence
+      accordion_panel(
+        title = "Risk Prevalence",
+        icon = icon("chart-column"),
+        card(
+          card_header("Risk Type Prevalence by Offset Category"),
+          card_body(
+            p(tags$small("Percentage of studies in each offset category reporting each risk type.")),
+            withSpinner(plotlyOutput("plot_risk_prevalence", height = "600px"),
+                        type = 4, color = "#3c8dbc")
+          )
+        )
+      ),
+
+      # Card 3: Risk Co-occurrence
       accordion_panel(
         title = "Risk Co-occurrence",
         icon = icon("grip"),
@@ -94,7 +108,7 @@ exploreTabUI <- function() {
         )
       ),
 
-      # Card 3: Temporal Trends
+      # Card 4: Temporal Trends
       accordion_panel(
         title = "Temporal Trends",
         icon = icon("chart-line"),

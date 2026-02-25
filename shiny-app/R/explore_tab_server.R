@@ -50,8 +50,8 @@ exploreTabServer <- function(input, output, session) {
   plotly_layout <- function(p, ...) {
     p |> layout(
       font = list(family = "system-ui, sans-serif"),
-      margin = list(l = 10, r = 10, t = 30, b = 10),
-      legend = list(orientation = "h", y = -0.15),
+      margin = list(l = 10, r = 10, t = 30, b = 50),
+      legend = list(orientation = "h", y = -0.3, x = 0.5, xanchor = "center"),
       ...
     )
   }
@@ -155,7 +155,62 @@ exploreTabServer <- function(input, output, session) {
   })
 
   # ==========================================================================
-  # Card 2: Risk Co-occurrence
+  # Card 2: Risk Prevalence (diverging bar chart)
+  # ==========================================================================
+  output$plot_risk_prevalence <- renderPlotly({
+    d <- explore_data$risk_prevalence
+    if (nrow(d) == 0) return(plotly_empty())
+
+    # Pivot to wide for diverging layout
+    d_wide <- d |>
+      dplyr::select(permanence_risk_domain, permanence_risk_category,
+                     permanence_risk_type, offset_category_general, pct) |>
+      tidyr::pivot_wider(names_from = offset_category_general,
+                         values_from = pct, values_fill = 0)
+
+    # Ensure both columns exist
+    if (!"biodiversity" %in% names(d_wide)) d_wide$biodiversity <- 0
+    if (!"carbon" %in% names(d_wide)) d_wide$carbon <- 0
+
+    # Order by domain then category
+    d_wide <- d_wide |>
+      dplyr::arrange(permanence_risk_domain, permanence_risk_category,
+                      permanence_risk_type)
+
+    # Create diverging data
+    risk_labels <- d_wide$permanence_risk_type
+    bio_vals <- -d_wide$biodiversity
+    carbon_vals <- d_wide$carbon
+
+    max_val <- max(abs(c(bio_vals, carbon_vals)), na.rm = TRUE) * 1.15
+
+    p <- plot_ly() |>
+      add_bars(y = risk_labels, x = bio_vals, name = "Biodiversity",
+               marker = list(color = offset_colors["biodiversity"]),
+               orientation = "h",
+               hovertemplate = "%{y}: %{customdata}%<extra>Biodiversity</extra>",
+               customdata = abs(bio_vals)) |>
+      add_bars(y = risk_labels, x = carbon_vals, name = "Carbon",
+               marker = list(color = offset_colors["carbon"]),
+               orientation = "h",
+               hovertemplate = "%{y}: %{x}%<extra>Carbon</extra>") |>
+      plotly_layout(
+        barmode = "relative",
+        xaxis = list(
+          title = "% of studies",
+          range = c(-max_val, max_val),
+          tickvals = seq(-100, 100, 20),
+          ticktext = abs(seq(-100, 100, 20))
+        ),
+        yaxis = list(title = "", categoryorder = "array",
+                     categoryarray = rev(risk_labels)),
+        margin = list(l = 250)
+      )
+    p
+  })
+
+  # ==========================================================================
+  # Card 3: Risk Co-occurrence
   # ==========================================================================
   output$plot_cooccurrence <- renderPlotly({
     d <- explore_data$cooccurrence
@@ -186,7 +241,7 @@ exploreTabServer <- function(input, output, session) {
   })
 
   # ==========================================================================
-  # Card 3: Temporal Trends
+  # Card 4: Temporal Trends
   # ==========================================================================
   output$plot_temporal <- renderPlotly({
     view <- input$temporal_view

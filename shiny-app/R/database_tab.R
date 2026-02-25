@@ -7,15 +7,10 @@
 
 databaseTabUI <- function() {
   tagList(
-    # ---- Header: country filter + download ----
-    layout_columns(
-      col_widths = c(4, 4, 4),
-      uiOutput("country_filter_ui"),
-      div(),
-      div(
-        style = "padding-top: 25px; text-align: right;",
-        downloadButton("download_extended_db", "Download CSV", class = "btn-sm")
-      )
+    # ---- Header: download button ----
+    div(
+      style = "text-align: right; margin-bottom: 0.5rem;",
+      downloadButton("download_extended_db", "Download CSV", class = "btn-sm")
     ),
     # ---- Main content: table (+ optional detail panel) ----
     uiOutput("db_main_content")

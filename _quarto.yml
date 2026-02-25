@@ -69,6 +69,3 @@ crossref:
   fig-title: "Figure"
   tbl-title: "Table"
 
-# Bibliography
-bibliography: references.bib
-csl: https://www.zotero.org/styles/ecology

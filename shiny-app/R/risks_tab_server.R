@@ -7,22 +7,6 @@
 #               explore_data and typology loaded in global.R
 # ============================================================================
 
-# Color palettes (matching the analysis documents)
-risks_offset_colors <- c("biodiversity" = "#B19CD9", "carbon" = "#F0C05A")
-
-risks_global_risk_colors <- c(
-  "Climate and Environmental Disturbances" = "#a1d99b",
-  "Direct Anthropogenic Disturbances" = "#31a354",
-  "Compliance, Legal, and Governance Risks" = "#c6dbef",
-  "Data, Transparency, and Capacity Issues" = "#9ecae1",
-  "Financial Risks" = "#6baed6",
-  "Political Risks" = "#3182bd",
-  "Socioeconomic and Equity Risks" = "#08519c",
-  "Ecological Design and Implementation Failures" = "#fc9272",
-  "Misaligned Metrics, Standards, and Performance Criteria" = "#ef3b2c",
-  "Systemic Oversights and Risk Management Gaps" = "#99000d"
-)
-
 # Helper: render study links for risk summary
 render_study_links <- function(studies) {
   if (is.null(studies) || nrow(studies) == 0) {
@@ -45,74 +29,8 @@ render_study_links <- function(studies) {
 risksTabServer <- function(input, output, session) {
   if (is.null(explore_data)) return()
 
-  # ---- Plotly layout defaults ----
-  plotly_layout <- function(p, ...) {
-    p |> layout(
-      font = list(family = "system-ui, sans-serif"),
-      margin = list(l = 10, r = 10, t = 30, b = 10),
-      legend = list(orientation = "h", y = -0.15),
-      ...
-    )
-  }
-
   # ==========================================================================
-  # Section 1: Risk Prevalence (diverging bar chart)
-  # ==========================================================================
-  output$plot_risk_prevalence <- renderPlotly({
-    d <- explore_data$risk_prevalence
-    if (nrow(d) == 0) return(plotly_empty())
-
-    # Pivot to wide for diverging layout
-    d_wide <- d |>
-      dplyr::select(permanence_risk_domain, permanence_risk_category,
-                     permanence_risk_type, offset_category_general, pct) |>
-      tidyr::pivot_wider(names_from = offset_category_general,
-                         values_from = pct, values_fill = 0)
-
-    # Ensure both columns exist
-    if (!"biodiversity" %in% names(d_wide)) d_wide$biodiversity <- 0
-    if (!"carbon" %in% names(d_wide)) d_wide$carbon <- 0
-
-    # Order by domain then category
-    d_wide <- d_wide |>
-      dplyr::arrange(permanence_risk_domain, permanence_risk_category,
-                      permanence_risk_type)
-
-    # Create diverging data
-    risk_labels <- d_wide$permanence_risk_type
-    bio_vals <- -d_wide$biodiversity
-    carbon_vals <- d_wide$carbon
-    cat_colors <- risks_global_risk_colors[d_wide$permanence_risk_category]
-
-    max_val <- max(abs(c(bio_vals, carbon_vals)), na.rm = TRUE) * 1.15
-
-    p <- plot_ly() |>
-      add_bars(y = risk_labels, x = bio_vals, name = "Biodiversity",
-               marker = list(color = risks_offset_colors["biodiversity"]),
-               orientation = "h",
-               hovertemplate = "%{y}: %{customdata}%<extra>Biodiversity</extra>",
-               customdata = abs(bio_vals)) |>
-      add_bars(y = risk_labels, x = carbon_vals, name = "Carbon",
-               marker = list(color = risks_offset_colors["carbon"]),
-               orientation = "h",
-               hovertemplate = "%{y}: %{x}%<extra>Carbon</extra>") |>
-      plotly_layout(
-        barmode = "relative",
-        xaxis = list(
-          title = "% of studies",
-          range = c(-max_val, max_val),
-          tickvals = seq(-100, 100, 20),
-          ticktext = abs(seq(-100, 100, 20))
-        ),
-        yaxis = list(title = "", categoryorder = "array",
-                     categoryarray = rev(risk_labels)),
-        margin = list(l = 250)
-      )
-    p
-  })
-
-  # ==========================================================================
-  # Section 2: Risk Typology Browser
+  # Section 1: Risk Typology Browser
   # ==========================================================================
   risk_domains_df <- typology |> dplyr::distinct(risk_domain, risk_domain_description)
   risk_cats_df <- typology |> dplyr::distinct(risk_domain, risk_category, risk_category_description)

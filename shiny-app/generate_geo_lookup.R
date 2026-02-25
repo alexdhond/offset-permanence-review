@@ -110,6 +110,21 @@ if (length(eu_idx) > 0) {
   out$lng[eu_idx] <- 4.3517
 }
 
+# Override centroids for countries where overseas territories skew st_centroid()
+country_centroid_overrides <- list(
+  "France" = c(lat = 46.60, lng = 2.50)
+  # Add more overrides here as needed, e.g.:
+  # "Denmark" = c(lat = 56.00, lng = 10.00),
+  # "Netherlands" = c(lat = 52.23, lng = 5.00)
+)
+for (cname in names(country_centroid_overrides)) {
+  idx <- which(out$country == cname & (out$subnational_region == "" | is.na(out$subnational_region)))
+  if (length(idx) > 0) {
+    out$lat[idx] <- country_centroid_overrides[[cname]]["lat"]
+    out$lng[idx] <- country_centroid_overrides[[cname]]["lng"]
+  }
+}
+
 # Harmonize country names to match mapping code
 country_map <- c(
   "United States of America" = "United States",

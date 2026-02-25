@@ -10,21 +10,7 @@ risksTabUI <- function() {
     id = "risks_accordion",
     open = TRUE,
 
-    # Section 1: Risk Prevalence
-    accordion_panel(
-      title = "Risk Prevalence",
-      icon = icon("chart-column"),
-      card(
-        card_header("Risk Type Prevalence by Offset Category"),
-        card_body(
-          p(tags$small("Percentage of studies in each offset category reporting each risk type.")),
-          withSpinner(plotlyOutput("plot_risk_prevalence", height = "600px"),
-                      type = 4, color = "#3c8dbc")
-        )
-      )
-    ),
-
-    # Section 2: Risk Typology Browser
+    # Section 1: Risk Typology Browser
     accordion_panel(
       title = "Risk Typology Browser",
       icon = icon("sitemap"),
@@ -49,7 +35,7 @@ risksTabUI <- function() {
       )
     ),
 
-    # Section 3: Management Framework (placeholder)
+    # Section 2: Management Framework (placeholder)
     accordion_panel(
       title = "Management Framework",
       icon = icon("clipboard-check"),

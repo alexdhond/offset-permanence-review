@@ -254,10 +254,81 @@ map_locs <- map_locs |>
 map_locs <- map_locs |>
   filter(!is.na(lat), !is.na(lng))
 
-# Clean up columns for the final output
-map_locations <- map_locs |>
-  select(study_title, study_id, country_clean, subnational_region,
-         lat, lng, offset_category_general, study_publication_year)
+# ---- Merge nearby markers from the same study ----
+# Haversine distance in km (pure base R)
+haversine_km <- function(lat1, lng1, lat2, lng2) {
+  R <- 6371
+  dlat <- (lat2 - lat1) * pi / 180
+  dlng <- (lng2 - lng1) * pi / 180
+  a <- sin(dlat / 2)^2 + cos(lat1 * pi / 180) * cos(lat2 * pi / 180) * sin(dlng / 2)^2
+  R * 2 * atan2(sqrt(a), sqrt(1 - a))
+}
+
+# Build a location label from country + optional subnational region
+make_loc_label <- function(country, region) {
+  ifelse(nzchar(region), paste0(region, ", ", country), country)
+}
+
+map_locs$loc_label <- make_loc_label(map_locs$country_clean,
+                                     map_locs$subnational_region)
+
+# Split by study_title for merging (study_id is not unique — e.g. "alt_source")
+study_titles <- unique(map_locs$study_title)
+merged_rows <- vector("list", length(study_titles))
+
+for (si in seq_along(study_titles)) {
+  rows <- map_locs[map_locs$study_title == study_titles[si], , drop = FALSE]
+
+  if (nrow(rows) == 1) {
+    # Single-location study: pass through
+    merged_rows[[si]] <- data.frame(
+      study_title = rows$study_title[1],
+      study_id = rows$study_id[1],
+      lat = rows$lat[1],
+      lng = rows$lng[1],
+      offset_category_general = rows$offset_category_general[1],
+      study_publication_year = rows$study_publication_year[1],
+      n_locations = 1L,
+      location_label = rows$loc_label[1],
+      countries_all = rows$country_clean[1],
+      stringsAsFactors = FALSE
+    )
+  } else {
+    # Multi-location study: cluster within 500 km
+    n <- nrow(rows)
+    dist_mat <- matrix(0, n, n)
+    for (i in seq_len(n - 1)) {
+      for (j in (i + 1):n) {
+        d <- haversine_km(rows$lat[i], rows$lng[i], rows$lat[j], rows$lng[j])
+        dist_mat[i, j] <- d
+        dist_mat[j, i] <- d
+      }
+    }
+    clusters <- cutree(hclust(as.dist(dist_mat), method = "single"), h = 500)
+
+    cluster_ids <- unique(clusters)
+    cluster_rows <- vector("list", length(cluster_ids))
+    for (ci in seq_along(cluster_ids)) {
+      idx <- which(clusters == cluster_ids[ci])
+      cluster_rows[[ci]] <- data.frame(
+        study_title = rows$study_title[1],
+        study_id = rows$study_id[1],
+        lat = mean(rows$lat[idx]),
+        lng = mean(rows$lng[idx]),
+        offset_category_general = rows$offset_category_general[1],
+        study_publication_year = rows$study_publication_year[1],
+        n_locations = length(idx),
+        location_label = paste(rows$loc_label[idx], collapse = "; "),
+        countries_all = paste(unique(rows$country_clean[idx]), collapse = "; "),
+        stringsAsFactors = FALSE
+      )
+    }
+    merged_rows[[si]] <- do.call(rbind, cluster_rows)
+  }
+}
+
+map_locations <- do.call(rbind, merged_rows)
+rownames(map_locations) <- NULL
 
 # ---- Save everything ----
 explore_data <- list(

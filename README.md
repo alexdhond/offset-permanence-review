@@ -2,85 +2,44 @@
 
 Code and data for: *Permanence Risks to Biodiversity and Nature-based Carbon Offsets*.
 
-This repository contains the data pipeline, analysis scripts, and interactive Shiny app for a systematic review of permanence risks across 137 peer-reviewed studies of biodiversity and carbon offset programs.
-
 ## Repository Structure
 
 ```
 offset-permanence-review/
 ├── code/
 │   ├── 01_screening/          # Literature screening (metagear)
-│   ├── 02_data_prep/          # Data pipeline (scripts 01–18)
-│   │   └── 00_run_all.R       # Runs scripts 01–17 in sequence
+│   ├── 02_data_prep/          # Data pipeline (scripts 01–17)
+│   │   └── 00_run_all.R       # Runs all pipeline scripts in sequence
 │   ├── 03_analysis/           # Quarto analysis documents
-│   │   ├── permanence_risk_analysis.qmd
-│   │   ├── publication_figures.qmd
-│   │   └── supp_info_figures.qmd
-│   └── helpers/               # Shared utilities (data loading, palettes, etc.)
+│   └── helpers/               # Shared utilities (data loading, palettes)
 ├── data/
 │   ├── raw/                   # Source database (.xlsx)
 │   ├── lookups/               # Reference tables
 │   ├── cleaned/               # Intermediate cleaned data
-│   └── final/                 # Processed datasets
+│   └── final/                 # Analysis-ready dataset
 ├── shiny-app/                 # Interactive web application
 ├── output/
-│   ├── figures/main/          # Manuscript figures (600 dpi)
-│   └── figures/supplementary/ # Supplementary figures (300 dpi)
-├── _quarto.yml
-├── references.bib
+│   ├── figures/main/          # Manuscript figures
+│   └── figures/supplementary/ # Supplementary figures
 └── renv.lock
 ```
 
-## Reproducing the Analysis
+## Brief Analysis Overview
 
-**Requirements:** R (>= 4.5.0) and [Quarto](https://quarto.org/).
+1. We screened the literature and binned studies into yes, maybe, or no (`code/01_screening/`).
+2. We extracted data from the included studies and recorded it in a single Excel database (`data/raw/`); the raw database is not provided as it is messy.
+3. To clean up the raw database into an analysis-ready dataset, we created a pipeline of R scripts (`code/02_data_prep/`) that builds reference lookup tables, cleans each data domain (country, species, ecosystem, project type, delivery mechanism, program, policy, and permanence risk), and joins them into one long-format dataset of 137 studies.
+4. We analysed this dataset and produced all manuscript and supplementary figures using Quarto documents (`code/03_analysis/`).
 
-1. Clone the repository and open `offset-permanence-review.Rproj` in RStudio.
+## Interactive Database
 
-2. Restore package dependencies:
-   ```r
-   renv::restore()
-   ```
+An interactive database explorer is available at [alexdhond.shinyapps.io/offset-permanence-database](https://alexdhond.shinyapps.io/offset-permanence-database/).
 
-3. Run the data pipeline:
-   ```r
-   source("code/02_data_prep/00_run_all.R")
-   ```
-   This processes the raw database (`data/raw/offset_perm_rev_database.xlsx`) through 17 scripts that build lookup tables, clean each data domain, and join everything into a single long-format dataset: `data/final/offset_perm_rev_long_cleaned.csv` (~682K rows, 137 studies, 39 columns).
+## Contact
 
-4. Render the analysis documents:
-   ```r
-   quarto::quarto_render("code/03_analysis/permanence_risk_analysis.qmd")
-   quarto::quarto_render("code/03_analysis/publication_figures.qmd")
-   quarto::quarto_render("code/03_analysis/supp_info_figures.qmd")
-   ```
+For any questions or concerns about the code or files, please contact: 
 
-Optionally, create a condensed one-row-per-study summary:
-```r
-source("code/02_data_prep/18_create_condensed_database.R")
-```
-
-## Figure Outputs
-
-| Document | Output | Format |
-|----------|--------|--------|
-| `permanence_risk_analysis.qmd` | `output/figures/main/` | PNG (600 dpi) + SVG |
-| `publication_figures.qmd` | `output/figures/main/` | PNG (600 dpi) + SVG |
-| `supp_info_figures.qmd` | `output/figures/supplementary/` | PNG (300 dpi) |
-
-## Shiny App
-
-An interactive database explorer is deployed at [alexdhond.shinyapps.io/offset-permanence-database](https://alexdhond.shinyapps.io/offset-permanence-database/). To update it with the latest pipeline output, run `source("shiny-app/refresh_data.R")`. The app has its own `renv` environment.
-
-## Troubleshooting
-
-- **Figures not rendering?** Check that `code/helpers/load_data.R` ran successfully and `final_df` loaded.
-- **Slow world map?** Delete `cache/world_map_cached.rds` and re-render — it regenerates automatically.
-- **Cross-references broken?** Chunk labels must use `#| label: fig-name` (not `fig.name` or `fig_name`).
-
-## Author
-
-Alexander Dhond — Department of Biology, University of Oxford
+Alexander Dhond — [alexander.dhond@biology.ox.ac.uk]
 
 ## License
 

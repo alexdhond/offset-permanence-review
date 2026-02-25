@@ -20,7 +20,7 @@ mapTabServer <- function(input, output, session, data) {
   # ---- Populate country filter from precomputed locations ----
   observe({
     req(map_locations)
-    countries <- sort(unique(map_locations$country_clean))
+    countries <- sort(unique(unlist(strsplit(map_locations$countries_all, "; "))))
     updateSelectInput(session, "map_country_filter",
       choices = c("All", countries),
       selected = isolate(input$map_country_filter) %||% "All"
@@ -32,10 +32,11 @@ mapTabServer <- function(input, output, session, data) {
     req(map_locations)
     d <- map_locations
 
-    # Country filter
+    # Country filter (check inside semicolon-separated countries_all)
     sel_country <- input$map_country_filter
     if (!is.null(sel_country) && sel_country != "All") {
-      d <- d[d$country_clean == sel_country, , drop = FALSE]
+      matches <- vapply(strsplit(d$countries_all, "; "), function(x) sel_country %in% x, logical(1))
+      d <- d[matches, , drop = FALSE]
     }
 
     # Offset type filter
@@ -52,11 +53,22 @@ mapTabServer <- function(input, output, session, data) {
     badge_color <- ifelse(d$offset_category_general == "carbon", "#F0C05A", "#B19CD9")
     badge_text <- ifelse(d$offset_category_general == "carbon", "Carbon", "Biodiversity")
 
-    location_label <- ifelse(
-      !is.na(d$subnational_region) & nzchar(d$subnational_region),
-      paste0(d$subnational_region, ", ", d$country_clean),
-      d$country_clean
-    )
+    # Format location section: single line or bulleted list for merged markers
+    location_html <- vapply(seq_len(nrow(d)), function(i) {
+      if (d$n_locations[i] <= 1) {
+        sprintf('<div style="color:#555; font-size:0.85em; margin-bottom:6px;">%s</div>',
+                htmltools::htmlEscape(d$location_label[i]))
+      } else {
+        locs <- strsplit(d$location_label[i], "; ")[[1]]
+        items <- paste0("<li>", htmltools::htmlEscape(locs), "</li>", collapse = "")
+        sprintf(
+          paste0('<div style="color:#555; font-size:0.85em; margin-bottom:6px;">',
+                 'Locations (%d):',
+                 '<ul style="margin:2px 0 0 16px; padding:0;">%s</ul></div>'),
+          d$n_locations[i], items
+        )
+      }
+    }, character(1))
 
     sprintf(
       paste0(
@@ -67,7 +79,7 @@ mapTabServer <- function(input, output, session, data) {
                    'font-size:0.8em; font-weight:500;">%s</span>',
             '<span style="color:#666; font-size:0.85em; margin-left:6px;">%s</span>',
           '</div>',
-          '<div style="color:#555; font-size:0.85em; margin-bottom:6px;">%s</div>',
+          '%s',
           '<button class="go-to-study-btn btn btn-sm btn-outline-primary" ',
                   'data-title="%s" style="font-size:0.8em;">',
             'View in Database',
@@ -78,7 +90,7 @@ mapTabServer <- function(input, output, session, data) {
       badge_color,
       badge_text,
       htmltools::htmlEscape(as.character(d$study_publication_year)),
-      htmltools::htmlEscape(location_label),
+      location_html,
       htmltools::htmlEscape(d$study_title)
     )
   }
@@ -131,7 +143,8 @@ mapTabServer <- function(input, output, session, data) {
           zoomToBoundsOnClick = TRUE,
           spiderfyOnMaxZoom = TRUE,
           showCoverageOnHover = TRUE,
-          maxClusterRadius = 45
+          maxClusterRadius = 45,
+          spiderfyDistanceMultiplier = 1.8
         )
       ) |>
       leaflet::addLegend(
