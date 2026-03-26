@@ -28,7 +28,7 @@ offset-permanence-review/
 
 1. We screened the literature and binned studies into yes, maybe, or no (`code/01_screening/`).
 2. We extracted data from the included studies and recorded it in a single Excel database (`data/raw/`); the raw database is not provided as it is messy.
-3. To clean up the raw database into an analysis-ready dataset, we created a pipeline of R scripts (`code/02_data_prep/`) that builds reference lookup tables, cleans each data domain (country, species, ecosystem, project type, delivery mechanism, program, policy, and permanence risk), and joins them into one long-format dataset of 137 studies.
+3. To clean up the raw database into an analysis-ready dataset, we created a pipeline of R scripts (`code/02_data_prep/`) that builds reference lookup tables, cleans each data domain (country, species, ecosystem, project type, delivery mechanism, program, policy, and permanence risk), and joins them into one long-format dataset of 137 studies, which is provided in (`data/final/`).
 4. We analysed this dataset and produced all manuscript and supplementary figures using Quarto documents (`code/03_analysis/`).
 
 ## Interactive Database
