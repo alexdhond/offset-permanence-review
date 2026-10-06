@@ -3,7 +3,7 @@
 # =============================================================================
 # Purpose: Create a condensed (wide-format) database with one row per study
 #
-# Input:  data/final/offset_perm_rev_long_cleaned.csv (682K rows, one per combination)
+# Input:  data/final/offset_perm_rev_long_cleaned.rds (682K rows, one per combination)
 # Output: data/final/offset_perm_rev_condensed.csv (137 rows, one per study)
 #         data/final/offset_perm_rev_condensed.rds
 #
@@ -20,11 +20,8 @@ library(readr)
 
 # Load the long-format cleaned data
 message("Loading long-format data...")
-long_df <- read_csv(
-
-  here("data", "final", "offset_perm_rev_long_cleaned.csv"),
-  col_types = cols(.default = col_character())
-)
+long_df <- readRDS(here("data", "final", "offset_perm_rev_long_cleaned.rds")) %>%
+  mutate(across(everything(), as.character))
 
 message("  Loaded ", nrow(long_df), " rows from ", n_distinct(long_df$study_title), " studies")
 

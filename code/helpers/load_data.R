@@ -39,16 +39,7 @@ knitr::opts_chunk$set(
 # Load Primary Dataset ----------------------------------------------------
 
 # Load the cleaned, long-format final dataset
-final_df <- read_csv(
-  here("data", "final", "offset_perm_rev_long_cleaned.csv"),
-  guess_max = 10000,
-  col_types = cols(
-    species_common_name     = col_character(),
-    species_scientific_name = col_character(),
-    species_taxonomic_group = col_character(),
-    .default = col_guess()
-  )
-)
+final_df <- readRDS(here("data", "final", "offset_perm_rev_long_cleaned.rds"))
 
 # Ensure every study_title has a unique study_id
 # (Creates deterministic IDs based on factor levels)

@@ -235,10 +235,10 @@ final_df <- final_df %>%
 output_dir <- here("data", "final")
 if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
 
-# Correct: build full path using file.path()
-write_csv(final_df, file.path(output_dir, "offset_perm_rev_long_cleaned.csv"))
+# Save as RDS: the CSV was over 2 GB, the RDS is about 13 MB
+saveRDS(final_df, file.path(output_dir, "offset_perm_rev_long_cleaned.rds"))
 
-message("Cleaned and renamed long-format dataset saved to 'data/final/offset_perm_rev_long_cleaned.csv'")
+message("Cleaned and renamed long-format dataset saved to 'data/final/offset_perm_rev_long_cleaned.rds'")
 
 # ---------------------------
 # 11. Validation Summary

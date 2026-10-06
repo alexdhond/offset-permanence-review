@@ -5,7 +5,7 @@
 #
 # This script:
 # 1. Copies the source Excel database from the main project folder
-# 2. Copies final CSV files from the main project's data/final folder
+# 2. Copies final CSV and RDS files from the main project's data/final folder
 # 3. Converts all CSV/Excel files to RDS format
 # 4. Regenerates db_summary_stats.rds
 # 5. Updates the data timestamp
@@ -81,7 +81,7 @@ if (file.exists(SOURCE_EXCEL)) {
 # Step 2: Copy derived CSV files
 log_msg("Step 2: Copying derived CSV files...")
 if (dir.exists(SOURCE_DERIVED_DIR)) {
-  derived_files <- list.files(SOURCE_DERIVED_DIR, pattern = "\\.(csv|xlsx)$", full.names = TRUE)
+  derived_files <- list.files(SOURCE_DERIVED_DIR, pattern = "\\.(csv|xlsx|rds)$", full.names = TRUE)
   if (length(derived_files) > 0) {
     for (f in derived_files) {
       safe_copy(f, file.path(TARGET_DATA_DIR, basename(f)), "derived file")
